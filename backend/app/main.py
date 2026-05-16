@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.auth.routes import router as auth_router
 from app.config import get_settings
+from app.game.routes import router as game_router
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.storage.redis_client import RedisClient
 
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RateLimitMiddleware)
 
     app.include_router(auth_router)
+    app.include_router(game_router)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict:
