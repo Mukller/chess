@@ -21,8 +21,17 @@ const STATUS_LABEL: Record<string, string> = {
   abandoned: "Партия покинута",
 };
 
+const RESULT_LABEL: Record<string, string> = {
+  checkmate: "Мат — партия завершена",
+  stalemate: "Пат — ничья",
+  draw: "Ничья",
+  resigned: "Вы сдались",
+  abandoned: "Партия покинута",
+};
+
 export function GamePage({ onLeave }: Props) {
   const token = useSessionStore((s) => s.token);
+  const rating = useSessionStore((s) => s.rating);
   const game = useGameStore((s) => s.game);
   const hint = useGameStore((s) => s.hint);
   const isThinking = useGameStore((s) => s.isThinking);
@@ -33,6 +42,7 @@ export function GamePage({ onLeave }: Props) {
   const errorMessage = useGameStore((s) => s.errorMessage);
   const connected = useGameStore((s) => s.socketConnected);
   const lastEngineSan = useGameStore((s) => s.lastEngineSan);
+  const ratingChange = useGameStore((s) => s.ratingChange);
   const [hintLoading, setHintLoading] = useState(false);
 
   const socketRef = useGameSocket(token, game?.game_id ?? null);
@@ -89,7 +99,11 @@ export function GamePage({ onLeave }: Props) {
 
   const finished = game.status !== "active";
   const statusLabel = STATUS_LABEL[game.status] ?? game.status;
-  const turnLabel = game.turn === game.user_color ? "Ваш ход" : "Ход соперника";
+  const turnLabel = finished
+    ? (RESULT_LABEL[game.status] ?? statusLabel)
+    : game.turn === game.user_color
+      ? "Ваш ход"
+      : "Ход соперника";
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
@@ -121,6 +135,23 @@ export function GamePage({ onLeave }: Props) {
         </div>
       </div>
 
+      {finished && ratingChange !== null ? (
+        <div
+          className={`rounded-xl p-3 text-center text-sm font-semibold ${
+            ratingChange > 0
+              ? "bg-emerald-50 text-emerald-700"
+              : ratingChange < 0
+                ? "bg-red-50 text-red-600"
+                : "bg-surface-alt text-surface-hint"
+          }`}
+        >
+          Рейтинг: {rating}{" "}
+          <span className="font-mono">
+            ({ratingChange > 0 ? "+" : ""}{ratingChange})
+          </span>
+        </div>
+      ) : null}
+
       <Board
         state={game}
         hintBestMove={hint?.best_move}
@@ -128,7 +159,7 @@ export function GamePage({ onLeave }: Props) {
         disabled={finished || isThinking}
       />
 
-      {lastEngineSan ? (
+      {lastEngineSan && !finished ? (
         <div className="rounded-xl bg-surface-alt p-3 text-sm text-surface-text">
           Ход соперника: <span className="font-mono font-semibold">{lastEngineSan}</span>
         </div>

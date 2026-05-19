@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
   --tg-theme-bg-color: #ffffff;
   --tg-theme-text-color: #111111;
   --tg-theme-hint-color: #707579;

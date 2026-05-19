@@ -3,14 +3,22 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api/client";
 import { GamePage } from "./pages/GamePage";
 import { HomePage } from "./pages/HomePage";
-import { applyTelegramTheme, useTelegram } from "./hooks/useTelegram";
 import { useGameStore, useSessionStore } from "./store/gameStore";
 import type { Color, Difficulty } from "./types/game";
 
-type View = "loading" | "home" | "game" | "error";
+type View = "loading" | "home" | "game";
+
+function getOrCreateDeviceId(): string {
+  const key = "chess_device_id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
 
 export function App() {
-  const tg = useTelegram();
   const session = useSessionStore();
   const game = useGameStore((s) => s.game);
   const setGame = useGameStore((s) => s.setGame);
@@ -19,28 +27,14 @@ export function App() {
   const resetGame = useGameStore((s) => s.reset);
 
   const [view, setView] = useState<View>("loading");
-  const [bootError, setBootError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-
-  useEffect(() => {
-    applyTelegramTheme(tg);
-  }, [tg]);
 
   useEffect(() => {
     let cancelled = false;
     async function bootstrap() {
-      const initData = tg?.initData;
-      if (!initData) {
-        if (!cancelled) {
-          setBootError(
-            "Telegram WebApp недоступен. Откройте бот в Telegram и нажмите кнопку Играть.",
-          );
-          setView("error");
-        }
-        return;
-      }
+      const deviceId = getOrCreateDeviceId();
       try {
-        const response = await api.loginTelegram(initData);
+        const response = await api.loginAnonymous(deviceId);
         if (cancelled) return;
         session.setSession({ token: response.access_token, user: response.user });
         setView("home");
@@ -48,16 +42,16 @@ export function App() {
         if (cancelled) return;
         const message =
           error instanceof ApiError ? error.detail ?? error.message : String(error);
-        setBootError(`Ошибка авторизации: ${message}`);
-        setView("error");
+        setError(`Ошибка подключения: ${message}`);
+        setView("home");
       }
     }
-    if (tg) bootstrap();
+    bootstrap();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tg]);
+  }, []);
 
   const handleStart = useCallback(
     async (options: { difficulty: Difficulty; user_color: Color }) => {
@@ -87,15 +81,7 @@ export function App() {
   if (view === "loading") {
     return (
       <div className="flex h-screen items-center justify-center text-surface-hint">
-        Загружаем Telegram WebApp…
-      </div>
-    );
-  }
-
-  if (view === "error") {
-    return (
-      <div className="mx-auto flex h-screen max-w-md items-center justify-center p-6 text-center text-sm text-red-600">
-        {bootError}
+        Подключение…
       </div>
     );
   }
@@ -106,7 +92,6 @@ export function App() {
 
   return (
     <HomePage
-      userName={session.user?.first_name ?? "игрок"}
       starting={starting}
       errorMessage={errorMessage}
       onStart={handleStart}

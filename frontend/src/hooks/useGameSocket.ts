@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 
 import { GameSocket } from "../api/websocket";
-import { useGameStore } from "../store/gameStore";
+import { useGameStore, useSessionStore } from "../store/gameStore";
+import type { GameStatus } from "../types/game";
 
 export function useGameSocket(token: string | null, gameId: string | null) {
   const socketRef = useRef<GameSocket | null>(null);
@@ -10,13 +11,20 @@ export function useGameSocket(token: string | null, gameId: string | null) {
   const setError = useGameStore((s) => s.setError);
   const setThinking = useGameStore((s) => s.setThinking);
   const applyEngineSan = useGameStore((s) => s.applyEngineSan);
+  const setRatingChange = useGameStore((s) => s.setRatingChange);
+  const setRating = useSessionStore((s) => s.setRating);
 
   useEffect(() => {
     if (!token || !gameId) return;
     const socket = new GameSocket(gameId, token, {
       onEvent: (event) => {
         switch (event.type) {
-          case "snapshot":
+          case "snapshot": {
+            setGame(event.state);
+            setRating(event.rating);
+            setThinking(false);
+            break;
+          }
           case "position": {
             setGame(event.state);
             if ("engine_move" in event) {
@@ -26,7 +34,17 @@ export function useGameSocket(token: string | null, gameId: string | null) {
             break;
           }
           case "game_over": {
-            setError(`Игра окончена: ${event.status}${event.result ? ` (${event.result})` : ""}`);
+            // Update game state status — essential for resign (no position event precedes it)
+            const currentGame = useGameStore.getState().game;
+            if (currentGame) {
+              setGame({
+                ...currentGame,
+                status: event.status as GameStatus,
+                result: event.result,
+              });
+            }
+            setRating(event.rating);
+            setRatingChange(event.rating_change);
             setThinking(false);
             break;
           }
@@ -53,7 +71,7 @@ export function useGameSocket(token: string | null, gameId: string | null) {
       socket.close();
       socketRef.current = null;
     };
-  }, [token, gameId, setGame, setConnected, setError, setThinking, applyEngineSan]);
+  }, [token, gameId, setGame, setConnected, setError, setThinking, applyEngineSan, setRating, setRatingChange]);
 
   return socketRef;
 }

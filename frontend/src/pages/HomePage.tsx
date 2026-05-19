@@ -2,26 +2,27 @@ import { useState } from "react";
 
 import { ColorSelector } from "../components/ColorSelector";
 import { DifficultySelector } from "../components/DifficultySelector";
+import { useSessionStore } from "../store/gameStore";
 import type { Color, Difficulty } from "../types/game";
 
 interface Props {
-  userName: string;
   starting: boolean;
   errorMessage: string | null;
   onStart: (options: { difficulty: Difficulty; user_color: Color }) => void;
 }
 
-export function HomePage({ userName, starting, errorMessage, onStart }: Props) {
+export function HomePage({ starting, errorMessage, onStart }: Props) {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [color, setColor] = useState<Color>("white");
+  const rating = useSessionStore((s) => s.rating);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 p-4">
       <header className="text-center">
-        <div className="text-4xl">♟️</div>
+        <div className="text-4xl">♟</div>
         <h1 className="mt-2 text-xl font-bold text-surface-text">Шахматы против Stockfish</h1>
-        <p className="text-sm text-surface-hint">
-          Привет, {userName}! Выберите параметры и начните партию.
+        <p className="mt-1 text-sm font-semibold text-surface-hint">
+          Рейтинг: <span className="text-surface-text">{rating}</span>
         </p>
       </header>
 
