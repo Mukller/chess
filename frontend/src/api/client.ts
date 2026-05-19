@@ -57,10 +57,10 @@ async function request<T>(
 }
 
 export const api = {
-  loginTelegram(initData: string): Promise<LoginResponse> {
-    return request<LoginResponse>("/auth/telegram", {
+  loginAnonymous(deviceId: string): Promise<LoginResponse> {
+    return request<LoginResponse>("/auth/anonymous", {
       method: "POST",
-      body: JSON.stringify({ init_data: initData }),
+      body: JSON.stringify({ device_id: deviceId }),
     });
   },
 

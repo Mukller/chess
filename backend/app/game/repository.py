@@ -5,6 +5,8 @@ from app.config import get_settings
 from app.game.models import GameState
 from app.storage.redis_client import get_redis
 
+DEFAULT_RATING = 1200
+
 
 def _game_key(game_id: str) -> str:
     return f"game:{game_id}"
@@ -12,6 +14,10 @@ def _game_key(game_id: str) -> str:
 
 def _user_index_key(user_id: int) -> str:
     return f"user:{user_id}:games"
+
+
+def _rating_key(user_id: int) -> str:
+    return f"rating:{user_id}"
 
 
 class GameRepository:
@@ -45,3 +51,12 @@ class GameRepository:
     async def list_for_user(self, user_id: int, limit: int = 20) -> List[str]:
         redis = get_redis()
         return await redis.zrevrange(_user_index_key(user_id), 0, max(0, limit - 1))
+
+    async def get_rating(self, user_id: int) -> int:
+        redis = get_redis()
+        val = await redis.get(_rating_key(user_id))
+        return int(val) if val else DEFAULT_RATING
+
+    async def save_rating(self, user_id: int, rating: int) -> None:
+        redis = get_redis()
+        await redis.set(_rating_key(user_id), str(rating))

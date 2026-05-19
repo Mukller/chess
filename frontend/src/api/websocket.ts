@@ -9,14 +9,14 @@ function deriveDefaultWsBase(): string {
 }
 
 export type ServerEvent =
-  | { type: "snapshot"; protocol: number; state: GameState }
+  | { type: "snapshot"; protocol: number; state: GameState; rating: number }
   | {
       type: "position";
       state: GameState;
       player_move: string;
       engine_move: { uci: string; san: string | null } | null;
     }
-  | { type: "game_over"; result: string | null; status: string }
+  | { type: "game_over"; result: string | null; status: string; rating: number; rating_change: number }
   | { type: "error"; detail: string }
   | { type: "pong" };
 

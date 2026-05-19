@@ -1,10 +1,12 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from app.auth.jwt_utils import InvalidTokenError, decode_access_token
-from app.game.models import GameStatus
+from app.game.models import Color, GameStatus
+from app.game.rating import apply_result
+from app.game.repository import GameRepository
 from app.game.service import (
     GameAlreadyFinishedError,
     GameForbiddenError,
@@ -41,6 +43,31 @@ def _state_payload(state, board=None) -> dict:
     return summary
 
 
+async def _broadcast_game_over(game_id: str, state, user_id: int, repo: GameRepository) -> None:
+    current_rating = await repo.get_rating(user_id)
+    if state.result:
+        new_rating, delta = apply_result(
+            current_rating,
+            state.difficulty.value,
+            state.result,
+            state.user_color is Color.WHITE,
+        )
+        await repo.save_rating(user_id, new_rating)
+    else:
+        new_rating, delta = current_rating, 0
+
+    await manager.broadcast(
+        game_id,
+        {
+            "type": "game_over",
+            "result": state.result,
+            "status": state.status.value,
+            "rating": new_rating,
+            "rating_change": delta,
+        },
+    )
+
+
 @router.websocket("/ws/game/{game_id}")
 async def game_socket(
     websocket: WebSocket,
@@ -53,6 +80,7 @@ async def game_socket(
         return
 
     service = GameService()
+    repo = GameRepository()
     try:
         state = await service.get(game_id, user_id)
     except GameNotFoundError:
@@ -64,11 +92,13 @@ async def game_socket(
 
     await manager.connect(game_id, websocket)
     try:
+        current_rating = await repo.get_rating(user_id)
         await websocket.send_json(
             {
                 "type": "snapshot",
                 "protocol": PROTOCOL_VERSION,
                 "state": _state_payload(state),
+                "rating": current_rating,
             }
         )
 
@@ -117,26 +147,12 @@ async def game_socket(
                 await manager.broadcast(game_id, payload)
 
                 if outcome.state.status is not GameStatus.ACTIVE:
-                    await manager.broadcast(
-                        game_id,
-                        {
-                            "type": "game_over",
-                            "result": outcome.state.result,
-                            "status": outcome.state.status.value,
-                        },
-                    )
+                    await _broadcast_game_over(game_id, outcome.state, user_id, repo)
                 continue
 
             if kind == "resign":
                 state = await service.resign(game_id, user_id)
-                await manager.broadcast(
-                    game_id,
-                    {
-                        "type": "game_over",
-                        "result": state.result,
-                        "status": state.status.value,
-                    },
-                )
+                await _broadcast_game_over(game_id, state, user_id, repo)
                 continue
 
             await websocket.send_json({"type": "error", "detail": f"unknown message type: {kind}"})
