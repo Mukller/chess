@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
         )
         app.state.engine_pool = None
 
-    bot = TelegramBot()
+    bot = TelegramBot(engine_pool=app.state.engine_pool)
     await bot.start()
     app.state.bot = bot
 

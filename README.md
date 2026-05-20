@@ -3,9 +3,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![aiogram 3](https://img.shields.io/badge/aiogram-3-2CA5E0.svg)](https://docs.aiogram.dev/)
 [![React 18](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
 
-Полноценный Telegram-бот с **WebApp** интерфейсом для игры в шахматы против AI на базе **Stockfish**.
+Полноценный Telegram-бот для игры в шахматы против AI на базе **Stockfish**. Полностью кнопочный интерфейс прямо внутри чата — доска как сетка inline-кнопок, без необходимости запускать WebApp. Также включён React WebApp как опциональный режим.
 
 > 🇬🇧 English version: [README_EN.md](README_EN.md)
 
@@ -13,16 +14,45 @@
 
 ## Возможности
 
-- Игра против Stockfish (3 уровня сложности: лёгкий / средний / сложный)
-- Полноценная шахматная доска: drag-and-drop, подсветка возможных ходов, отображение шаха
-- Подсказка лучшего хода с оценкой позиции
-- Откат хода (Undo), сдача (Resign), новая партия (New Game)
-- Аутентификация через Telegram `initData` (HMAC-SHA256, серверная валидация)
-- WebSocket-синхронизация позиции в реальном времени
+- **Полностью кнопочное управление**: единственная команда — `/start`, всё остальное через клавиатуры
+- **Игра против Stockfish**: 4 уровня сложности — Лёгкий, Средний, Сложный, Эксперт
+- **Доска как сетка inline-кнопок 8×8** с цветными клетками (`⬜`/`⬛`), без подписей рядов/файлов
+- **Подсветка ходов**: 🟦 выбранная фигура · 🟢/🟩 возможный ход · 🟥 возможное взятие
+- **Двухкликовый ход**: фигура → клетка назначения, автопромоушн пешки в ферзя
+- **Авто-переворот доски** при игре чёрными
+- **Профиль игрока**: ELO-рейтинг (старт 1200, K = 32), пиковый ELO, винрейт, разбивка по уровням
+- **История партий** — все сыгранные партии записываются в Redis с настройками, временем (МСК, UTC+3) и полным списком ходов; доступ из профиля
+- Подсказка лучшего хода и оценка позиции (REST)
+- Аутентификация через Telegram `initData` (HMAC-SHA256) — для WebApp
+- WebSocket-синхронизация позиции — для WebApp
 - Backend authoritative — все ходы валидируются на сервере
-- Сессии игры в Redis (TTL 24 часа по умолчанию)
-- Rate limiting (30 запросов/минуту на пользователя)
+- Rate limiting (30 запросов/мин на пользователя)
 - Полный Docker-стек: backend / frontend / redis / nginx
+
+---
+
+## Скриншот интерфейса бота
+
+```
+   ┌─────────────────────────────────┐
+   │   ♔ Партия началась             │
+   │   🎯 Уровень: Эксперт           │
+   │   ♔ Вы играете: белые           │
+   ├─────────────────────────────────┤
+   │  ♜  ♞  ♝  ♛  ♚  ♝  ♞  ♜         │  ← чёрные фигуры
+   │  ♟  ♟  ♟  ♟  ♟  ♟  ♟  ♟         │
+   │  ⬜ ⬛ ⬜ ⬛ ⬜ ⬛ ⬜ ⬛           │  ← пустые клетки в цвет
+   │  ⬛ ⬜ ⬛ ⬜ ⬛ ⬜ ⬛ ⬜           │
+   │  ⬜ ⬛ ⬜ ⬛ 🟦 ⬛ ⬜ ⬛           │  ← подсветка выбранной
+   │  ⬛ ⬜ ⬛ ⬜ 🟢 ⬜ ⬛ ⬜           │  ← возможный ход
+   │  P  P  P  P  ⬜ P  P  P          │
+   │  R  N  B  Q  K  B  N  R          │  ← белые фигуры (FEN)
+   ├─────────────────────────────────┤
+   │  🛑 Остановить игру             │
+   └─────────────────────────────────┘
+```
+
+Белые фигуры обозначены буквами `K Q R B N P` (всегда видны на любой теме), чёрные — заполненными unicode-символами `♚ ♛ ♜ ♝ ♞ ♟`.
 
 ---
 
@@ -33,13 +63,13 @@
 - python-chess (chess engine API)
 - Stockfish (серверный, пул воркеров)
 - aiogram 3 (Telegram Bot API)
-- Redis 7 (game sessions, rate limiting)
+- Redis 7 (game sessions, статистика, история, rate limiting)
 - PyJWT, Pydantic v2
 
-### Frontend
+### Frontend (опциональный WebApp)
 - React 18, TypeScript 5, Vite 5
 - react-chessboard, chess.js
-- Zustand (state management)
+- Zustand
 - TailwindCSS
 - Telegram WebApp SDK
 
@@ -56,7 +86,7 @@
 │   Telegram Client   │     │      Browser / WebApp    │
 └──────────┬──────────┘     └─────────────┬────────────┘
            │                              │
-           │ /play, /start                │ HTTPS + WSS
+           │ inline buttons               │ HTTPS + WSS
            ▼                              ▼
        ┌────────┐                    ┌─────────┐
        │  Bot   │                    │  Nginx  │
@@ -70,17 +100,45 @@
        └────┬─────┘      └──────┬────┘         └──────────┘
             │                   │
             ▼                   ▼
-       ┌──────────────────────────┐
-       │      GameService          │
-       │  (python-chess, repo)     │
-       └──────┬──────────┬─────────┘
-              │          │
-              ▼          ▼
-        ┌─────────┐  ┌─────────────────┐
-        │  Redis  │  │   EnginePool    │
-        └─────────┘  │ N Stockfish proc│
-                     └─────────────────┘
+       ┌──────────────────────────────────────────┐
+       │   GameService · StatsService · History   │
+       └──────┬──────────┬────────────────┬───────┘
+              │          │                │
+              ▼          ▼                ▼
+        ┌─────────┐  ┌─────────────────┐ ┌───────────┐
+        │  Redis  │  │   EnginePool    │ │  History  │
+        │  games  │  │ N Stockfish proc│ │ (Redis 5y)│
+        │  stats  │  └─────────────────┘ └───────────┘
+        └─────────┘
 ```
+
+---
+
+## Кнопочный интерфейс
+
+### Главное меню
+- `♟️ Играть` · `👤 Профиль`
+- `❓ Помощь`
+
+### Выбор сложности
+- `1️⃣ Лёгкий` · `2️⃣ Средний`
+- `3️⃣ Сложный` · `4️⃣ Эксперт`
+- `⬅️ Назад`
+
+### Выбор цвета
+- `⚪ Белые` · `⚫ Чёрные`
+- `🎲 Случайно`
+- `⬅️ Назад`
+
+### В игре
+- Доска как inline-сетка 8×8 (тап на фигуру → тап на клетку)
+- `🛑 Остановить игру` — снизу под полем ввода
+
+### Профиль
+- ELO, рекорд, статистика, разбивка по уровням
+- `📜 История игр` — список последних 10 партий с возможностью открыть детали (ходы, время, ELO до/после)
+- `🗑 Сбросить статистику`
+- `⬅️ Назад`
 
 ---
 
@@ -91,9 +149,9 @@
 ├── backend/                     # FastAPI приложение
 │   ├── app/
 │   │   ├── auth/                # Telegram initData + JWT
-│   │   ├── bot/                 # aiogram bot + handlers
-│   │   ├── engine/              # Stockfish pool
-│   │   ├── game/                # GameService, REST routes, models
+│   │   ├── bot/                 # aiogram bot + handlers (button-driven UI)
+│   │   ├── engine/              # Stockfish pool + difficulty profiles
+│   │   ├── game/                # GameService, StatsService, HistoryService, REST routes
 │   │   ├── middleware/          # Rate limiting
 │   │   ├── storage/             # Redis client
 │   │   ├── ws/                  # WebSocket gateway
@@ -101,18 +159,18 @@
 │   │   └── main.py
 │   ├── Dockerfile               # Stockfish + Python
 │   └── requirements.txt
-├── frontend/                    # React + Vite WebApp
+├── frontend/                    # React + Vite WebApp (optional)
 │   ├── src/
-│   │   ├── api/                 # REST + WS клиент
-│   │   ├── components/          # Board, MoveList, HintPanel, …
-│   │   ├── hooks/               # useTelegram, useGameSocket
-│   │   ├── pages/               # HomePage, GamePage
-│   │   ├── store/               # Zustand stores
+│   │   ├── api/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   ├── store/
 │   │   └── types/
-│   ├── Dockerfile               # multi-stage: build + nginx
+│   ├── Dockerfile
 │   └── package.json
 ├── nginx/
-│   └── nginx.conf               # reverse proxy
+│   └── nginx.conf
 ├── docker-compose.yml
 ├── .env.example
 ├── CHANGELOG.md
@@ -132,7 +190,7 @@
 
 1. Откройте [@BotFather](https://t.me/BotFather), команда `/newbot`
 2. Сохраните полученный `TELEGRAM_BOT_TOKEN`
-3. Настройте WebApp через `/setdomain` или `/newapp`, укажите публичный URL вашего деплоя
+3. (Опционально) Настройте WebApp через `/setdomain` или `/newapp`, укажите публичный URL вашего деплоя
 
 ### 2. Клонируйте репозиторий
 
@@ -162,7 +220,7 @@ docker compose up -d --build
 - `frontend` — внутренний, порт `80`
 - `redis` — внутренний, порт `6379`
 
-После старта откройте бота в Telegram, отправьте `/play` и нажмите кнопку «Играть».
+После старта откройте бота в Telegram и отправьте `/start`. Дальше всё через кнопки.
 
 ### 5. Production-чеклист
 
@@ -170,6 +228,22 @@ docker compose up -d --build
 - Установите `APP_ENV=production` — выключит Swagger UI
 - Замените `APP_SECRET_KEY` на длинный случайный
 - Настройте Prometheus/Grafana/Sentry (см. [RELEASE_INFO.md](RELEASE_INFO.md))
+
+---
+
+## ELO-система
+
+| Параметр                  | Значение                     |
+| ------------------------- | ---------------------------- |
+| Стартовый рейтинг         | 1200                         |
+| K-фактор                  | 32                           |
+| ELO противника (Лёгкий)   | 800                          |
+| ELO противника (Средний)  | 1400                         |
+| ELO противника (Сложный)  | 1900                         |
+| ELO противника (Эксперт)  | 2400                         |
+| Учёт прерванной партии    | как поражение (`score = 0`) |
+
+Формула: `delta = K * (actual - expected)`, где `expected = 1 / (1 + 10^((opp_elo - my_elo) / 400))`.
 
 ---
 
@@ -204,13 +278,29 @@ docker compose up -d --build
 
 ## Уровни сложности Stockfish
 
-| Уровень   | Skill Level | Глубина | Время хода |
-| --------- | ----------- | ------- | ---------- |
-| Easy      | 2           | 4       | 100 ms     |
-| Medium    | 8           | 8       | 300 ms     |
-| Hard      | 18          | 14      | 1200 ms    |
+| Уровень   | Skill Level | Глубина | Время хода | ELO противника |
+| --------- | ----------- | ------- | ---------- | -------------- |
+| Лёгкий    | 2           | 4       | 100 ms     | ~800           |
+| Средний   | 8           | 8       | 300 ms     | ~1400          |
+| Сложный   | 18          | 14      | 1200 ms    | ~1900          |
+| Эксперт   | 20          | 22      | 3000 ms    | ~2400          |
 
 Конфигурация в [backend/app/engine/config.py](backend/app/engine/config.py).
+
+---
+
+## Хранение данных
+
+| Ключ Redis                   | TTL       | Содержимое                                    |
+| ---------------------------- | --------- | --------------------------------------------- |
+| `game:{id}`                  | 24 ч      | Активная партия (FEN, ходы, статус)           |
+| `user:{id}:games`            | 24 ч      | Индекс активных партий пользователя           |
+| `user:{id}:stats`            | 5 лет     | ELO, винрейт, разбивка по сложности           |
+| `user:{id}:history`          | 5 лет     | Индекс завершённых партий (sorted set)        |
+| `game_history:{id}`          | 5 лет     | Запись завершённой партии (полный лог ходов)  |
+| `rl:{user}:{window}`         | 60 с      | Скользящее окно для rate limiting             |
+
+Запись истории включает: настройки (сложность, цвет), время начала/конца в **МСК (UTC+3)**, полный список ходов в UCI, финальный FEN, ELO до и после, результат.
 
 ---
 
@@ -236,7 +326,7 @@ npm run dev
 # открой http://localhost:3000
 ```
 
-Для тестирования вне Telegram WebApp авторизация работать не будет (нет валидного `initData`).
+Для тестирования вне Telegram WebApp авторизация работать не будет (нет валидного `initData`). Telegram-бот можно тестировать напрямую в чате через `/start`.
 
 ---
 
@@ -253,10 +343,13 @@ npm run dev
 
 ## Roadmap
 
+- [x] Кнопочный UI без команд
+- [x] 4 уровня сложности (включая Эксперт)
+- [x] ELO рейтинг и профиль
+- [x] История партий с пересмотром
 - [ ] PvP (игрок vs игрок)
-- [ ] ELO рейтинг и история партий (PostgreSQL)
 - [ ] PGN экспорт партий
-- [ ] Анализ сыгранных партий
+- [ ] Анализ сыгранных партий с движком
 - [ ] Турниры
 - [ ] Puzzle / Opening trainer
 

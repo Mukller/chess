@@ -9,6 +9,7 @@ class Difficulty(StrEnum):
     EASY = "easy"
     MEDIUM = "medium"
     HARD = "hard"
+    EXPERT = "expert"
 
 
 class Color(StrEnum):

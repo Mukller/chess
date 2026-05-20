@@ -14,6 +14,7 @@ DIFFICULTY_PROFILES: dict[Difficulty, DifficultyProfile] = {
     Difficulty.EASY: DifficultyProfile(skill_level=2, depth=4, move_time_ms=100),
     Difficulty.MEDIUM: DifficultyProfile(skill_level=8, depth=8, move_time_ms=300),
     Difficulty.HARD: DifficultyProfile(skill_level=18, depth=14, move_time_ms=1200),
+    Difficulty.EXPERT: DifficultyProfile(skill_level=20, depth=22, move_time_ms=3000),
 }
 
 

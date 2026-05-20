@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 class TelegramBot:
     """Owns the aiogram bot + dispatcher and runs polling as a background task."""
 
-    def __init__(self) -> None:
+    def __init__(self, engine_pool=None) -> None:
         settings = get_settings()
         self._token = settings.telegram_bot_token
+        self._engine_pool = engine_pool
         self._bot: Optional[Bot] = None
         self._dispatcher: Optional[Dispatcher] = None
         self._task: Optional[asyncio.Task] = None
@@ -42,6 +43,7 @@ class TelegramBot:
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
         self._dispatcher = Dispatcher()
+        self._dispatcher["engine_pool"] = self._engine_pool
         self._dispatcher.include_router(handlers_router)
         self._task = asyncio.create_task(self._run_polling(), name="telegram-bot-polling")
         logger.info("telegram bot polling started")
