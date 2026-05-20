@@ -24,7 +24,14 @@ class TelegramBot:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self._token)
+        if not self._token:
+            return False
+        if self._token == "YOUR_BOT_TOKEN_HERE":
+            return False
+        if ":" not in self._token:
+            return False
+        parts = self._token.split(":", 1)
+        return len(parts) == 2 and parts[0].isdigit()
 
     async def start(self) -> None:
         if not self.is_configured:

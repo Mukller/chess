@@ -1,6 +1,6 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-pydantic==2.10.3
+pydantic==2.9.2
 pydantic-settings==2.7.0
 python-chess==1.999
 redis==5.2.1

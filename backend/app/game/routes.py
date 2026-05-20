@@ -1,8 +1,10 @@
 from typing import Annotated
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.auth.dependencies import CurrentUserId
+from app.config import get_settings
 from app.game.schemas import (
     EngineMoveSummary,
     GameStateResponse,
@@ -19,6 +21,7 @@ from app.game.service import (
     IllegalMoveError,
     state_summary,
 )
+from app.storage.redis_client import get_redis
 
 router = APIRouter(prefix="/api/game", tags=["game"])
 
@@ -62,6 +65,17 @@ async def start_game(
         user_color=payload.user_color,
         engine_pool=pool,
     )
+
+    # Persist user game entry to Redis for broadcast script
+    redis = get_redis()
+    settings = get_settings()
+    user_key = f"user:{user_id}:games"
+    game_id = f"{user_id}:{int(time.time())}"
+    async with redis.pipeline(transaction=True) as pipe:
+        pipe.zadd(user_key, {game_id: int(time.time())})
+        pipe.expire(user_key, settings.redis_game_ttl_seconds)
+        await pipe.execute()
+
     return _state_response(state)
 
 
