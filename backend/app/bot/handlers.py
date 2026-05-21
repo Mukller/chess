@@ -418,14 +418,10 @@ def _restore_difficulty(value) -> Difficulty:
 
 # =================== FORUM TOPIC MESSAGE HANDLER ===================
 
-@router.message()
+@router.message(F.chat.type.in_(("group", "supergroup")))
 async def group_message_handler(message: Message, bot: Bot) -> None:
-    """Handle incoming messages in the group - forward to main chat."""
+    """Handle incoming messages in the group - just log them."""
     try:
-        # Only handle messages in groups/supergroups
-        if message.chat.type not in ("group", "supergroup"):
-            return
-
         # Skip messages from bot itself
         if message.from_user.is_bot:
             return
@@ -447,9 +443,6 @@ async def group_message_handler(message: Message, bot: Bot) -> None:
         username = user.username or user.first_name or str(user.id)
 
         logger.info(f"Group message from {username}: {message.text}")
-
-        # Just log the message for now - don't try to create topics
-        # (forum topics require specific permissions and setup)
 
     except Exception as e:
         logger.exception(f"Error in group_message_handler: {e}")
