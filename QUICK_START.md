@@ -5,71 +5,12 @@ Get the Telegram Chess Bot running locally in minutes.
 ## Prerequisites
 
 - Git
-- Docker & Docker Compose (recommended) OR:
-  - Python 3.12+
-  - Node.js 18+
-  - Redis 7+
-  - Stockfish chess engine
+- Python 3.12+
+- Redis 7+
+- Stockfish chess engine
 - Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
 
-## Option 1: Docker Compose (Easiest)
-
-### 1. Clone & Setup
-
-```bash
-git clone https://github.com/Mukller/chess.git
-cd chess
-
-# Copy environment template
-cp backend/.env.example backend/.env
-```
-
-### 2. Configure Environment
-
-Edit `backend/.env`:
-
-```bash
-nano backend/.env
-# Or use your editor:
-# - TELEGRAM_BOT_TOKEN: Get from @BotFather (/newbot)
-# - TELEGRAM_BOT_USERNAME: Your bot's username (without @)
-# - TELEGRAM_WEBAPP_URL: http://localhost:3000 (for local dev)
-# - APP_ENV: development
-# - CORS_ORIGINS: ["http://localhost:3000","http://localhost"]
-```
-
-### 3. Start Services
-
-```bash
-docker compose up -d
-
-# Verify all services are running
-docker compose ps
-# Expected: redis (Up), api (Up), frontend (Up), nginx (Up)
-
-# Watch logs
-docker compose logs -f api
-```
-
-### 4. Test Bot
-
-1. Open Telegram
-2. Search for your bot by username
-3. Send `/start`
-4. Click "♟️ Играть с ботом"
-5. Select difficulty and color
-
-### 5. Access Frontend (Optional)
-
-- **WebApp**: http://localhost/app
-- **API Health**: http://localhost/health
-- **API Docs**: http://localhost/docs (OpenAPI/Swagger)
-
----
-
-## Option 2: Local Development (Python + Node.js)
-
-### Backend Setup
+## Setup
 
 ```bash
 # Navigate to backend
@@ -95,37 +36,19 @@ nano .env
 # Adjust REDIS_URL if needed: redis://127.0.0.1:6379/0
 ```
 
-### Frontend Setup
+### Start the Bot
 
 ```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start dev server (runs on port 5173)
-npm run dev
-```
-
-### Start API Server
-
-```bash
-cd backend
-
-# Activate venv
+# Activate venv (if not already activated)
 source venv/bin/activate  # Linux/Mac
 # OR
 venv\Scripts\activate  # Windows
 
-# Run development server
+# Run bot server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Access in Browser
-
-- **Frontend**: http://localhost:5173
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+The bot will start and connect to Telegram using your `TELEGRAM_BOT_TOKEN`. Open [@BotFather](https://t.me/BotFather) in Telegram to find or create your bot, then start playing chess!
 
 ---
 
