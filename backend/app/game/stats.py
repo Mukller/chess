@@ -13,10 +13,14 @@ INITIAL_ELO = 1200
 K_FACTOR = 32
 
 OPPONENT_ELO: dict[Difficulty, int] = {
-    Difficulty.EASY: 800,
-    Difficulty.MEDIUM: 1400,
-    Difficulty.HARD: 1900,
-    Difficulty.EXPERT: 2400,
+    Difficulty.BEGINNER: 500,
+    Difficulty.EASY:     800,
+    Difficulty.CASUAL:   1100,
+    Difficulty.MEDIUM:   1400,
+    Difficulty.ADVANCED: 1700,
+    Difficulty.HARD:     1900,
+    Difficulty.EXPERT:   2200,
+    Difficulty.MASTER:   2600,
 }
 
 

@@ -6,10 +6,14 @@ from typing import List, Optional
 
 
 class Difficulty(StrEnum):
+    BEGINNER = "beginner"
     EASY = "easy"
+    CASUAL = "casual"
     MEDIUM = "medium"
+    ADVANCED = "advanced"
     HARD = "hard"
     EXPERT = "expert"
+    MASTER = "master"
 
 
 class Color(StrEnum):

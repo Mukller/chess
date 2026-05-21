@@ -1,5 +1,6 @@
 import logging
 import random
+import time
 from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -10,6 +11,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     CallbackQuery,
 )
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import chess
@@ -18,33 +20,46 @@ from app.game.service import GameService, IllegalMoveError, GameAlreadyFinishedE
 from app.game.models import Color, Difficulty, GameStatus
 from app.game.stats import StatsService, OPPONENT_ELO
 from app.game.history import HistoryService, GameHistoryEntry, now_msk_iso
+from app.game.online import OnlineService
 
 logger = logging.getLogger(__name__)
 router = Router(name="chess-handlers")
 
 
-WHITE_LABELS = {"P": "P", "N": "N", "B": "B", "R": "R", "Q": "Q", "K": "K"}
-BLACK_LABELS = {"p": "♟", "n": "♞", "b": "♝", "r": "♜", "q": "♛", "k": "♚"}
+# =================== PIECE GLYPHS (both colours) ===================
+# Standard Unicode chess pieces — outlined for white, filled for black.
+PIECE_GLYPHS = {
+    "K": "♔", "Q": "♕", "R": "♖", "B": "♗", "N": "♘", "P": "♙",
+    "k": "♚", "q": "♛", "r": "♜", "b": "♝", "n": "♞", "p": "♟",
+}
 
-EMPTY_LIGHT = "⬜"
-EMPTY_DARK = "⬛"
+# =================== CELL BACKGROUNDS / HIGHLIGHTS ===================
+EMPTY_LIGHT = "·"
+EMPTY_DARK = " "
 HL_SELECTED = "🟦"
-HL_MOVE_LIGHT = "🟩"
+HL_MOVE_LIGHT = "🟢"
 HL_MOVE_DARK = "🟢"
 HL_CAPTURE = "🟥"
 
 FILES = ["a", "b", "c", "d", "e", "f", "g", "h"]
 
-BTN_PLAY = "♟️ Играть"
+# =================== BUTTONS ===================
+BTN_PLAY = "♟️ Играть с ботом"
+BTN_HOTSEAT = "👥 Двое на одном"
+BTN_ONLINE = "🌐 Онлайн PvP"
 BTN_PROFILE = "👤 Профиль"
 BTN_HELP = "❓ Помощь"
 BTN_STOP = "🛑 Остановить игру"
 BTN_BACK = "⬅️ Назад"
 
-BTN_DIFF_EASY = "1️⃣ Лёгкий"
-BTN_DIFF_MEDIUM = "2️⃣ Средний"
-BTN_DIFF_HARD = "3️⃣ Сложный"
-BTN_DIFF_EXPERT = "4️⃣ Эксперт"
+BTN_DIFF_BEGINNER = "🐣 Новичок"
+BTN_DIFF_EASY     = "1️⃣ Лёгкий"
+BTN_DIFF_CASUAL   = "2️⃣ Простой"
+BTN_DIFF_MEDIUM   = "3️⃣ Средний"
+BTN_DIFF_ADVANCED = "4️⃣ Продвинутый"
+BTN_DIFF_HARD     = "5️⃣ Сложный"
+BTN_DIFF_EXPERT   = "6️⃣ Эксперт"
+BTN_DIFF_MASTER   = "👑 Гроссмейстер"
 
 BTN_COLOR_WHITE = "⚪ Белые"
 BTN_COLOR_BLACK = "⚫ Чёрные"
@@ -53,17 +68,38 @@ BTN_COLOR_RANDOM = "🎲 Случайно"
 BTN_HISTORY = "📜 История игр"
 BTN_RESET_STATS = "🗑 Сбросить статистику"
 
+BTN_ONLINE_HOST = "🆕 Создать игру"
+BTN_ONLINE_JOIN = "🔑 Ввести код"
+
+DIFFICULTY_BTN_MAP = {
+    BTN_DIFF_BEGINNER: Difficulty.BEGINNER,
+    BTN_DIFF_EASY:     Difficulty.EASY,
+    BTN_DIFF_CASUAL:   Difficulty.CASUAL,
+    BTN_DIFF_MEDIUM:   Difficulty.MEDIUM,
+    BTN_DIFF_ADVANCED: Difficulty.ADVANCED,
+    BTN_DIFF_HARD:     Difficulty.HARD,
+    BTN_DIFF_EXPERT:   Difficulty.EXPERT,
+    BTN_DIFF_MASTER:   Difficulty.MASTER,
+}
+
 
 class GameState(StatesGroup):
     selecting_difficulty = State()
     selecting_color = State()
     game_in_progress = State()
+    hotseat_in_progress = State()
+    online_menu = State()
+    online_waiting_code = State()
+    online_in_progress = State()
 
+
+# =================== KEYBOARDS ===================
 
 def _main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=BTN_PLAY), KeyboardButton(text=BTN_PROFILE)],
+            [KeyboardButton(text=BTN_PLAY), KeyboardButton(text=BTN_HOTSEAT)],
+            [KeyboardButton(text=BTN_ONLINE), KeyboardButton(text=BTN_PROFILE)],
             [KeyboardButton(text=BTN_HELP)],
         ],
         resize_keyboard=True,
@@ -73,8 +109,10 @@ def _main_keyboard() -> ReplyKeyboardMarkup:
 def _difficulty_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=BTN_DIFF_EASY), KeyboardButton(text=BTN_DIFF_MEDIUM)],
-            [KeyboardButton(text=BTN_DIFF_HARD), KeyboardButton(text=BTN_DIFF_EXPERT)],
+            [KeyboardButton(text=BTN_DIFF_BEGINNER), KeyboardButton(text=BTN_DIFF_EASY)],
+            [KeyboardButton(text=BTN_DIFF_CASUAL),   KeyboardButton(text=BTN_DIFF_MEDIUM)],
+            [KeyboardButton(text=BTN_DIFF_ADVANCED), KeyboardButton(text=BTN_DIFF_HARD)],
+            [KeyboardButton(text=BTN_DIFF_EXPERT),   KeyboardButton(text=BTN_DIFF_MASTER)],
             [KeyboardButton(text=BTN_BACK)],
         ],
         resize_keyboard=True,
@@ -110,6 +148,18 @@ def _profile_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def _online_menu_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_ONLINE_HOST), KeyboardButton(text=BTN_ONLINE_JOIN)],
+            [KeyboardButton(text=BTN_BACK)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+# =================== BOARD RENDER ===================
+
 def _is_light(square: int) -> bool:
     return (chess.square_file(square) + chess.square_rank(square)) % 2 == 1
 
@@ -119,10 +169,7 @@ def _empty_label(square: int) -> str:
 
 
 def _piece_glyph(piece: chess.Piece) -> str:
-    sym = piece.symbol()
-    if sym.isupper():
-        return WHITE_LABELS.get(sym, sym)
-    return BLACK_LABELS.get(sym, sym)
+    return PIECE_GLYPHS.get(piece.symbol(), piece.symbol())
 
 
 def _square_label(piece, square, is_selected, is_target_empty, is_target_capture) -> str:
@@ -137,10 +184,10 @@ def _square_label(piece, square, is_selected, is_target_empty, is_target_capture
     return _piece_glyph(piece)
 
 
-def _board_keyboard(fen: str, user_color: Color, selected_square: str | None = None) -> InlineKeyboardMarkup:
-    """Clean 8x8 chess board — no rank/file labels, emoji-backed cells, highlights."""
+def _board_keyboard(fen: str, perspective: Color, selected_square: str | None = None) -> InlineKeyboardMarkup:
+    """8x8 board, no labels. `perspective` controls flip — bottom row is that side."""
     board = chess.Board(fen)
-    flip = user_color == Color.BLACK
+    flip = perspective == Color.BLACK
 
     targets: set[int] = set()
     selected_idx: int | None = None
@@ -173,13 +220,41 @@ def _board_keyboard(fen: str, user_color: Color, selected_square: str | None = N
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+async def _safe_edit_markup(callback: CallbackQuery, markup: InlineKeyboardMarkup) -> None:
+    """Edit the inline keyboard, ignoring 'message is not modified' errors and minor rerender hiccups."""
+    try:
+        await callback.message.edit_reply_markup(reply_markup=markup)
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            return
+        logger.warning("edit_reply_markup failed: %s", e)
+
+
+async def _safe_edit_text(callback: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None = None) -> None:
+    try:
+        await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            return
+        logger.warning("edit_text failed: %s", e)
+
+
+# =================== HELPERS ===================
+
+DIFFICULTY_NAMES = {
+    Difficulty.BEGINNER: "Новичок",
+    Difficulty.EASY:     "Лёгкий",
+    Difficulty.CASUAL:   "Простой",
+    Difficulty.MEDIUM:   "Средний",
+    Difficulty.ADVANCED: "Продвинутый",
+    Difficulty.HARD:     "Сложный",
+    Difficulty.EXPERT:   "Эксперт",
+    Difficulty.MASTER:   "Гроссмейстер",
+}
+
+
 def _difficulty_text(d: Difficulty) -> str:
-    return {
-        Difficulty.EASY: "Лёгкий",
-        Difficulty.MEDIUM: "Средний",
-        Difficulty.HARD: "Сложный",
-        Difficulty.EXPERT: "Эксперт",
-    }.get(d, "—")
+    return DIFFICULTY_NAMES.get(d, "—")
 
 
 def _color_text(c: Color) -> str:
@@ -199,13 +274,11 @@ def _format_profile(stats) -> str:
     if stats.by_difficulty:
         lines.append("")
         lines.append("<b>По уровням:</b>")
-        diff_order = ["easy", "medium", "hard", "expert"]
-        diff_names = {"easy": "Лёгкий", "medium": "Средний", "hard": "Сложный", "expert": "Эксперт"}
-        for key in diff_order:
-            ds = stats.by_difficulty.get(key)
+        for d in Difficulty:
+            ds = stats.by_difficulty.get(d.value)
             if ds and ds.played > 0:
                 lines.append(
-                    f"• {diff_names[key]}: {ds.played} (П:{ds.wins} / Пр:{ds.losses} / Н:{ds.draws})"
+                    f"• {DIFFICULTY_NAMES[d]}: {ds.played} (П:{ds.wins} / Пр:{ds.losses} / Н:{ds.draws})"
                 )
     return "\n".join(lines)
 
@@ -301,13 +374,17 @@ def _restore_difficulty(value) -> Difficulty:
     return Difficulty.MEDIUM
 
 
+# =================== /START + MAIN MENU ===================
+
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
     text = (
         "♟️ <b>Telegram Chess Bot</b>\n\n"
-        "Выберите действие в нижнем меню:\n"
-        "• <b>Играть</b> — новая партия\n"
+        "Выберите режим в нижнем меню:\n"
+        "• <b>Играть с ботом</b> — против Stockfish, 8 уровней\n"
+        "• <b>Двое на одном</b> — игра на одном устройстве\n"
+        "• <b>Онлайн PvP</b> — игра с другом по коду\n"
         "• <b>Профиль</b> — статистика, ELO, история\n"
         "• <b>Помощь</b> — справка"
     )
@@ -318,32 +395,36 @@ async def start_handler(message: Message, state: FSMContext) -> None:
 async def help_handler(message: Message) -> None:
     text = (
         "<b>❓ Помощь</b>\n\n"
-        "1. Нажмите <b>♟️ Играть</b> и выберите уровень и цвет в нижнем меню.\n"
-        "2. Для хода нажмите свою фигуру на доске, затем клетку назначения.\n"
+        "<b>Режимы:</b>\n"
+        "• <b>Играть с ботом</b> — против Stockfish, 8 уровней сложности (от Новичка до Гроссмейстера)\n"
+        "• <b>Двое на одном</b> — два игрока ходят по очереди на одном телефоне, доска переворачивается\n"
+        "• <b>Онлайн PvP</b> — играйте с другом: создайте игру и поделитесь кодом\n\n"
+        "<b>Управление:</b>\n"
+        "1. Нажмите свою фигуру — подсветятся возможные ходы\n"
+        "2. Нажмите клетку назначения — ход выполнится\n"
         "   • 🟦 — выбранная фигура\n"
-        "   • 🟢/🟩 — возможный ход\n"
+        "   • 🟢 — возможный ход\n"
         "   • 🟥 — возможное взятие\n"
-        "3. Завершить партию — <b>🛑 Остановить игру</b>.\n"
-        "4. Статистика, ELO и история — <b>👤 Профиль</b>.\n\n"
+        "3. Завершить партию — <b>🛑 Остановить игру</b> снизу\n\n"
         "<b>Обозначения фигур:</b>\n"
-        "Белые: <code>K Q R B N P</code>\n"
+        "Белые: ♔ ♕ ♖ ♗ ♘ ♙\n"
         "Чёрные: ♚ ♛ ♜ ♝ ♞ ♟"
     )
     await message.answer(text, reply_markup=_main_keyboard(), parse_mode="HTML")
 
 
+# =================== PROFILE / HISTORY ===================
+
 @router.message(F.text == BTN_PROFILE)
 async def profile_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
-    stats_service = StatsService()
-    stats = await stats_service.get(message.from_user.id)
+    stats = await StatsService().get(message.from_user.id)
     await message.answer(_format_profile(stats), reply_markup=_profile_keyboard(), parse_mode="HTML")
 
 
 @router.message(F.text == BTN_RESET_STATS)
 async def reset_stats_handler(message: Message) -> None:
-    stats_service = StatsService()
-    stats = await stats_service.reset(message.from_user.id)
+    stats = await StatsService().reset(message.from_user.id)
     await message.answer(
         "♻️ Статистика сброшена.\n\n" + _format_profile(stats),
         reply_markup=_profile_keyboard(),
@@ -366,8 +447,7 @@ async def history_handler(message: Message) -> None:
 @router.callback_query(F.data.startswith("hist:"))
 async def history_entry_handler(callback: CallbackQuery) -> None:
     game_id = callback.data.split(":", 1)[1]
-    history = HistoryService()
-    entry = await history.get(game_id, callback.from_user.id)
+    entry = await HistoryService().get(game_id, callback.from_user.id)
     if not entry:
         await callback.answer("Запись не найдена", show_alert=True)
         return
@@ -375,31 +455,21 @@ async def history_entry_handler(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+# =================== AI: SELECT DIFFICULTY + COLOR ===================
+
 @router.message(F.text == BTN_PLAY)
 async def play_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(GameState.selecting_difficulty)
-    text = (
-        "<b>Выберите уровень сложности:</b>\n\n"
-        f"1️⃣ <b>Лёгкий</b> — для начинающих (ELO ~{OPPONENT_ELO[Difficulty.EASY]})\n"
-        f"2️⃣ <b>Средний</b> — клубный уровень (ELO ~{OPPONENT_ELO[Difficulty.MEDIUM]})\n"
-        f"3️⃣ <b>Сложный</b> — кандидат в мастера (ELO ~{OPPONENT_ELO[Difficulty.HARD]})\n"
-        f"4️⃣ <b>Эксперт</b> — максимум Stockfish (ELO ~{OPPONENT_ELO[Difficulty.EXPERT]})"
-    )
-    await message.answer(text, reply_markup=_difficulty_keyboard(), parse_mode="HTML")
+    lines = ["<b>Выберите уровень сложности:</b>", ""]
+    for d in Difficulty:
+        lines.append(f"• <b>{DIFFICULTY_NAMES[d]}</b> — ELO ~{OPPONENT_ELO[d]}")
+    await message.answer("\n".join(lines), reply_markup=_difficulty_keyboard(), parse_mode="HTML")
 
 
-@router.message(GameState.selecting_difficulty, F.text.in_({
-    BTN_DIFF_EASY, BTN_DIFF_MEDIUM, BTN_DIFF_HARD, BTN_DIFF_EXPERT,
-}))
+@router.message(GameState.selecting_difficulty, F.text.in_(set(DIFFICULTY_BTN_MAP.keys())))
 async def difficulty_choice_handler(message: Message, state: FSMContext) -> None:
-    mapping = {
-        BTN_DIFF_EASY: Difficulty.EASY,
-        BTN_DIFF_MEDIUM: Difficulty.MEDIUM,
-        BTN_DIFF_HARD: Difficulty.HARD,
-        BTN_DIFF_EXPERT: Difficulty.EXPERT,
-    }
-    difficulty = mapping[message.text]
+    difficulty = DIFFICULTY_BTN_MAP[message.text]
     await state.update_data(difficulty=difficulty.value)
     await state.set_state(GameState.selecting_color)
     text = (
@@ -423,9 +493,7 @@ async def back_universal_handler(message: Message, state: FSMContext) -> None:
     await message.answer("Главное меню.", reply_markup=_main_keyboard())
 
 
-@router.message(GameState.selecting_color, F.text.in_({
-    BTN_COLOR_WHITE, BTN_COLOR_BLACK, BTN_COLOR_RANDOM,
-}))
+@router.message(GameState.selecting_color, F.text.in_({BTN_COLOR_WHITE, BTN_COLOR_BLACK, BTN_COLOR_RANDOM}))
 async def color_choice_handler(message: Message, state: FSMContext, engine_pool=None) -> None:
     if message.text == BTN_COLOR_RANDOM:
         color = random.choice([Color.WHITE, Color.BLACK])
@@ -467,21 +535,11 @@ async def color_choice_handler(message: Message, state: FSMContext, engine_pool=
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
-    await message.answer(
-        "Доска:",
-        reply_markup=_board_keyboard(game_state.fen, color, None),
-    )
+    await message.answer("Доска:", reply_markup=_board_keyboard(game_state.fen, color, None))
 
 
-async def _persist_finished_game(
-    user_id: int,
-    state_data: dict,
-    final_state,
-    result: str,
-    elo_update=None,
-) -> None:
+async def _persist_finished_game(user_id, state_data, final_state, result, elo_update=None) -> None:
     try:
-        history = HistoryService()
         entry = GameHistoryEntry(
             game_id=final_state.game_id,
             user_id=user_id,
@@ -497,7 +555,7 @@ async def _persist_finished_game(
             elo_after=elo_update.elo_after if elo_update else 0,
             elo_delta=elo_update.delta if elo_update else 0,
         )
-        await history.save(entry)
+        await HistoryService().save(entry)
     except Exception:
         logger.exception("Failed to persist finished game")
 
@@ -512,10 +570,8 @@ async def stop_game_handler(message: Message, state: FSMContext) -> None:
     delta_text = ""
     if game_id:
         try:
-            game_service = GameService()
-            current = await game_service.get(game_id, user_id)
-            stats_service = StatsService()
-            elo_update = await stats_service.record_result(user_id, difficulty, user_score=0.0)
+            current = await GameService().get(game_id, user_id)
+            elo_update = await StatsService().record_result(user_id, difficulty, user_score=0.0)
             delta_text = f"\n📉 ELO: {elo_update.stats.elo} ({elo_update.delta:+d})"
             current.status = GameStatus.ABANDONED
             await _persist_finished_game(user_id, data, current, "aborted", elo_update)
@@ -530,18 +586,58 @@ async def stop_game_handler(message: Message, state: FSMContext) -> None:
     )
 
 
+@router.message(GameState.hotseat_in_progress, F.text == BTN_STOP)
+async def hotseat_stop_handler(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("🏁 <b>Hot-seat партия остановлена.</b>", reply_markup=_main_keyboard(), parse_mode="HTML")
+
+
+@router.message(GameState.online_in_progress, F.text == BTN_STOP)
+async def online_stop_handler(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    game_id = data.get("online_game_id")
+    if game_id:
+        await OnlineService().abort(game_id, message.from_user.id)
+    await state.clear()
+    await message.answer("🏁 <b>Онлайн партия остановлена.</b>", reply_markup=_main_keyboard(), parse_mode="HTML")
+
+
 @router.message(F.text == BTN_STOP)
 async def stop_no_game_handler(message: Message) -> None:
     await message.answer("Нет активной партии.", reply_markup=_main_keyboard())
 
+
+# =================== AI: SQUARE CLICK (board callback) ===================
 
 @router.callback_query(F.data == "noop")
 async def noop_handler(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+async def _route_square_callback(callback: CallbackQuery, state: FSMContext, engine_pool):
+    """Dispatch a square click to the right handler based on current FSM state."""
+    current = await state.get_state()
+    if current == GameState.hotseat_in_progress.state:
+        await _hotseat_square_handler(callback, state)
+    elif current == GameState.online_in_progress.state:
+        await _online_square_handler(callback, state)
+    else:
+        await _ai_square_handler(callback, state, engine_pool)
+
+
 @router.callback_query(F.data.startswith("sq:"))
-async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool=None) -> None:
+async def square_dispatcher(callback: CallbackQuery, state: FSMContext, engine_pool=None) -> None:
+    try:
+        await _route_square_callback(callback, state, engine_pool)
+    except Exception as e:
+        logger.exception("square dispatch error")
+        try:
+            await callback.answer(f"❌ {e}", show_alert=True)
+        except Exception:
+            pass
+
+
+async def _ai_square_handler(callback: CallbackQuery, state: FSMContext, engine_pool):
     square = callback.data.split(":", 1)[1]
     data = await state.get_data()
     game_id = data.get("game_id")
@@ -551,7 +647,7 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
     selected_square = data.get("selected_square")
 
     if not game_id:
-        await callback.answer("❌ Игра не инициализирована. Нажмите ♟️ Играть.", show_alert=True)
+        await callback.answer("❌ Игра не инициализирована. Нажмите ♟️ Играть с ботом.", show_alert=True)
         return
 
     game_service = GameService()
@@ -574,23 +670,18 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
         if piece is None:
             await callback.answer("Пустая клетка")
             return
-        is_white_piece = piece.color == chess.WHITE
         user_is_white = user_color == Color.WHITE
-        if is_white_piece != user_is_white:
+        if (piece.color == chess.WHITE) != user_is_white:
             await callback.answer("Это не ваша фигура")
             return
         await state.update_data(selected_square=square)
-        await callback.message.edit_reply_markup(
-            reply_markup=_board_keyboard(current.fen, user_color, square)
-        )
+        await _safe_edit_markup(callback, _board_keyboard(current.fen, user_color, square))
         await callback.answer()
         return
 
     if selected_square == square:
         await state.update_data(selected_square=None)
-        await callback.message.edit_reply_markup(
-            reply_markup=_board_keyboard(current.fen, user_color, None)
-        )
+        await _safe_edit_markup(callback, _board_keyboard(current.fen, user_color, None))
         await callback.answer("Отмена выбора")
         return
 
@@ -606,9 +697,7 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
     user_is_white = user_color == Color.WHITE
     if piece_at_target is not None and (piece_at_target.color == chess.WHITE) == user_is_white:
         await state.update_data(selected_square=square)
-        await callback.message.edit_reply_markup(
-            reply_markup=_board_keyboard(current.fen, user_color, square)
-        )
+        await _safe_edit_markup(callback, _board_keyboard(current.fen, user_color, square))
         await callback.answer()
         return
 
@@ -624,9 +713,7 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
     except IllegalMoveError:
         await callback.answer("❌ Некорректный ход")
         await state.update_data(selected_square=None)
-        await callback.message.edit_reply_markup(
-            reply_markup=_board_keyboard(current.fen, user_color, None)
-        )
+        await _safe_edit_markup(callback, _board_keyboard(current.fen, user_color, None))
         return
     except GameAlreadyFinishedError:
         await callback.answer("Игра уже завершена")
@@ -644,6 +731,7 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
     user_score = None
     keep_playing = True
     result_label = None
+    user_is_white = user_color == Color.WHITE
 
     if game_state.status == GameStatus.CHECKMATE:
         loser_white = chess.Board(game_state.fen).turn == chess.WHITE
@@ -671,8 +759,7 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
     elo_update = None
     if user_score is not None:
         try:
-            stats_service = StatsService()
-            elo_update = await stats_service.record_result(user_id, difficulty, user_score)
+            elo_update = await StatsService().record_result(user_id, difficulty, user_score)
             sign = "📈" if elo_update.delta > 0 else ("📉" if elo_update.delta < 0 else "📊")
             status_text += f"\n{sign} ELO: <b>{elo_update.stats.elo}</b> ({elo_update.delta:+d})"
         except Exception:
@@ -681,23 +768,376 @@ async def square_handler(callback: CallbackQuery, state: FSMContext, engine_pool
 
     await state.update_data(selected_square=None)
 
+    # Always include a move counter so message text is unique → edit_text always succeeds
+    move_no = len(game_state.moves)
     text = (
+        f"♟ Ход №{move_no}\n"
         f"👤 Ваш ход: <code>{move_uci}</code>\n"
         f"🤖 Ход компьютера: <code>{engine_move}</code>"
         f"{status_text}"
     )
 
     if keep_playing:
-        await callback.message.edit_text(
-            text,
-            reply_markup=_board_keyboard(game_state.fen, user_color, None),
-            parse_mode="HTML",
-        )
+        await _safe_edit_text(callback, text, _board_keyboard(game_state.fen, user_color, None))
     else:
         await state.clear()
-        await callback.message.edit_text(text, parse_mode="HTML")
+        await _safe_edit_text(callback, text)
         await callback.message.answer(
-            "Нажмите ♟️ Играть для новой партии.",
+            "Нажмите ♟️ Играть с ботом для новой партии.",
             reply_markup=_main_keyboard(),
         )
+    await callback.answer()
+
+
+# =================== HOT-SEAT MODE ===================
+
+@router.message(F.text == BTN_HOTSEAT)
+async def hotseat_start_handler(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    fen = chess.STARTING_FEN
+    await state.set_state(GameState.hotseat_in_progress)
+    await state.update_data(
+        hs_fen=fen,
+        hs_moves=[],
+        hs_turn="white",
+        selected_square=None,
+        started_at=now_msk_iso(),
+    )
+    await message.answer(
+        "<b>👥 Hot-seat: двое на одном устройстве</b>\n\n"
+        "Игроки ходят по очереди. После каждого хода доска переворачивается.\n"
+        "Сейчас ходят: <b>белые</b> (♔♕♖♗♘♙)",
+        reply_markup=_game_keyboard(),
+        parse_mode="HTML",
+    )
+    await message.answer("Доска:", reply_markup=_board_keyboard(fen, Color.WHITE, None))
+
+
+async def _hotseat_square_handler(callback: CallbackQuery, state: FSMContext) -> None:
+    square = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    fen = data.get("hs_fen") or chess.STARTING_FEN
+    turn = data.get("hs_turn", "white")
+    selected_square = data.get("selected_square")
+    moves: list = list(data.get("hs_moves") or [])
+
+    board = chess.Board(fen)
+    perspective = Color.WHITE if turn == "white" else Color.BLACK
+
+    if selected_square is None:
+        try:
+            sq_idx = chess.parse_square(square)
+        except ValueError:
+            await callback.answer()
+            return
+        piece = board.piece_at(sq_idx)
+        if piece is None:
+            await callback.answer("Пустая клетка")
+            return
+        side_is_white = piece.color == chess.WHITE
+        if (turn == "white") != side_is_white:
+            await callback.answer("Сейчас ход другой стороны")
+            return
+        await state.update_data(selected_square=square)
+        await _safe_edit_markup(callback, _board_keyboard(fen, perspective, square))
+        await callback.answer()
+        return
+
+    if selected_square == square:
+        await state.update_data(selected_square=None)
+        await _safe_edit_markup(callback, _board_keyboard(fen, perspective, None))
+        await callback.answer("Отмена выбора")
+        return
+
+    try:
+        from_idx = chess.parse_square(selected_square)
+        to_idx = chess.parse_square(square)
+    except ValueError:
+        await state.update_data(selected_square=None)
+        await callback.answer()
+        return
+
+    piece_at_target = board.piece_at(to_idx)
+    side_white = turn == "white"
+    if piece_at_target is not None and (piece_at_target.color == chess.WHITE) == side_white:
+        await state.update_data(selected_square=square)
+        await _safe_edit_markup(callback, _board_keyboard(fen, perspective, square))
+        await callback.answer()
+        return
+
+    move_uci = selected_square + square
+    piece = board.piece_at(from_idx)
+    if piece and piece.piece_type == chess.PAWN:
+        to_rank = chess.square_rank(to_idx)
+        if (side_white and to_rank == 7) or (not side_white and to_rank == 0):
+            move_uci += "q"
+
+    try:
+        move = chess.Move.from_uci(move_uci)
+    except Exception:
+        await callback.answer("❌ Некорректный ход")
+        return
+    if move not in board.legal_moves:
+        await callback.answer("❌ Нелегальный ход")
+        await state.update_data(selected_square=None)
+        await _safe_edit_markup(callback, _board_keyboard(fen, perspective, None))
+        return
+
+    board.push(move)
+    moves.append(move.uci())
+    new_fen = board.fen()
+    new_turn = "black" if turn == "white" else "white"
+    new_perspective = Color.BLACK if new_turn == "black" else Color.WHITE
+
+    status_text = ""
+    keep_playing = True
+    if board.is_checkmate():
+        winner = "Белые" if turn == "white" else "Чёрные"
+        status_text = f"\n🏆 <b>Мат! Победили {winner.lower()}!</b>"
+        keep_playing = False
+    elif board.is_stalemate():
+        status_text = "\n🤝 <b>Пат! Ничья.</b>"
+        keep_playing = False
+    elif board.is_insufficient_material() or board.is_seventyfive_moves() or board.is_fivefold_repetition():
+        status_text = "\n🤝 <b>Ничья.</b>"
+        keep_playing = False
+
+    await state.update_data(
+        hs_fen=new_fen,
+        hs_moves=moves,
+        hs_turn=new_turn,
+        selected_square=None,
+    )
+
+    move_no = len(moves)
+    side_label = "белых" if turn == "white" else "чёрных"
+    next_label = "белые" if new_turn == "white" else "чёрные"
+    text = (
+        f"♟ Ход №{move_no}\n"
+        f"Ход {side_label}: <code>{move_uci}</code>\n"
+        f"Сейчас ходят: <b>{next_label}</b>"
+        f"{status_text}"
+    )
+
+    if keep_playing:
+        await _safe_edit_text(callback, text, _board_keyboard(new_fen, new_perspective, None))
+    else:
+        await state.clear()
+        await _safe_edit_text(callback, text)
+        await callback.message.answer("Главное меню.", reply_markup=_main_keyboard())
+    await callback.answer()
+
+
+# =================== ONLINE PvP (scaffolding) ===================
+
+@router.message(F.text == BTN_ONLINE)
+async def online_menu_handler(message: Message, state: FSMContext) -> None:
+    await state.set_state(GameState.online_menu)
+    text = (
+        "<b>🌐 Онлайн PvP</b>\n\n"
+        "• <b>Создать игру</b> — получите код, передайте другу.\n"
+        "• <b>Ввести код</b> — присоединитесь к игре друга.\n\n"
+        "<i>⚠ Live-режим пока в бете: ходы соперника подгружаются по клику на доску.</i>"
+    )
+    await message.answer(text, reply_markup=_online_menu_keyboard(), parse_mode="HTML")
+
+
+@router.message(GameState.online_menu, F.text == BTN_ONLINE_HOST)
+async def online_host_handler(message: Message, state: FSMContext) -> None:
+    color = random.choice([Color.WHITE, Color.BLACK])
+    user = message.from_user
+    game = await OnlineService().create(user.id, user.username or user.full_name or str(user.id), color)
+    await state.set_state(GameState.online_in_progress)
+    await state.update_data(
+        online_game_id=game.game_id,
+        online_code=game.code,
+        online_role="host",
+        selected_square=None,
+        started_at=now_msk_iso(),
+    )
+    color_label = "белыми" if color == Color.WHITE else "чёрными"
+    await message.answer(
+        f"<b>🌐 Игра создана!</b>\n\n"
+        f"Код: <code>{game.code}</code>\n"
+        f"Вы играете: <b>{color_label}</b>\n\n"
+        f"Передайте код другу. Когда он присоединится, доска оживёт.\n"
+        f"Нажмите на доску, чтобы обновить состояние.",
+        reply_markup=_game_keyboard(),
+        parse_mode="HTML",
+    )
+    await message.answer("Доска:", reply_markup=_board_keyboard(game.fen, color, None))
+
+
+@router.message(GameState.online_menu, F.text == BTN_ONLINE_JOIN)
+async def online_join_prompt_handler(message: Message, state: FSMContext) -> None:
+    await state.set_state(GameState.online_waiting_code)
+    await message.answer(
+        "Введите 6-значный код игры:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text=BTN_BACK)]],
+            resize_keyboard=True,
+        ),
+    )
+
+
+@router.message(GameState.online_waiting_code, F.text & ~F.text.in_({BTN_BACK}))
+async def online_join_handler(message: Message, state: FSMContext) -> None:
+    code = (message.text or "").strip().upper()
+    if not code or len(code) > 12:
+        await message.answer("Код должен быть коротким. Попробуйте ещё раз.")
+        return
+    user = message.from_user
+    game = await OnlineService().join(code, user.id, user.username or user.full_name or str(user.id))
+    if not game:
+        await message.answer(
+            "❌ Код не найден или игра уже занята. Проверьте код и попробуйте снова.",
+            reply_markup=_online_menu_keyboard(),
+        )
+        await state.set_state(GameState.online_menu)
+        return
+    my_color = game.color_for_user(user.id)
+    if my_color is None:
+        await message.answer("❌ Не удалось определить цвет. Попробуйте позже.", reply_markup=_main_keyboard())
+        await state.clear()
+        return
+    await state.set_state(GameState.online_in_progress)
+    await state.update_data(
+        online_game_id=game.game_id,
+        online_code=game.code,
+        online_role="guest",
+        selected_square=None,
+        started_at=now_msk_iso(),
+    )
+    label = "белыми" if my_color == Color.WHITE else "чёрными"
+    await message.answer(
+        f"<b>🌐 Вы присоединились к игре <code>{game.code}</code></b>\n"
+        f"Соперник: {game.host_username or 'host'}\n"
+        f"Вы играете: <b>{label}</b>",
+        reply_markup=_game_keyboard(),
+        parse_mode="HTML",
+    )
+    await message.answer("Доска:", reply_markup=_board_keyboard(game.fen, my_color, None))
+
+
+async def _online_square_handler(callback: CallbackQuery, state: FSMContext) -> None:
+    square = callback.data.split(":", 1)[1]
+    data = await state.get_data()
+    game_id = data.get("online_game_id")
+    if not game_id:
+        await callback.answer("❌ Игра не найдена. Создайте новую.", show_alert=True)
+        return
+
+    service = OnlineService()
+    game = await service.get(game_id)
+    if not game:
+        await callback.answer("❌ Игра не найдена в базе.", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+    my_color = game.color_for_user(user_id)
+    if my_color is None:
+        await callback.answer("Вы не участник этой игры")
+        return
+
+    if game.status == "waiting":
+        await callback.answer("⏳ Ждём соперника...")
+        return
+    if game.status != "active":
+        await callback.answer(f"Игра завершена: {game.status}", show_alert=True)
+        return
+
+    selected_square = data.get("selected_square")
+    board = chess.Board(game.fen)
+
+    if game.turn != my_color.value:
+        await _safe_edit_markup(callback, _board_keyboard(game.fen, my_color, None))
+        await callback.answer("Сейчас не ваш ход")
+        return
+
+    if selected_square is None:
+        try:
+            sq_idx = chess.parse_square(square)
+        except ValueError:
+            await callback.answer()
+            return
+        piece = board.piece_at(sq_idx)
+        if piece is None:
+            await callback.answer("Пустая клетка")
+            return
+        my_is_white = my_color == Color.WHITE
+        if (piece.color == chess.WHITE) != my_is_white:
+            await callback.answer("Это не ваша фигура")
+            return
+        await state.update_data(selected_square=square)
+        await _safe_edit_markup(callback, _board_keyboard(game.fen, my_color, square))
+        await callback.answer()
+        return
+
+    if selected_square == square:
+        await state.update_data(selected_square=None)
+        await _safe_edit_markup(callback, _board_keyboard(game.fen, my_color, None))
+        await callback.answer("Отмена выбора")
+        return
+
+    try:
+        from_idx = chess.parse_square(selected_square)
+        to_idx = chess.parse_square(square)
+    except ValueError:
+        await state.update_data(selected_square=None)
+        await callback.answer()
+        return
+
+    piece_at_target = board.piece_at(to_idx)
+    my_is_white = my_color == Color.WHITE
+    if piece_at_target is not None and (piece_at_target.color == chess.WHITE) == my_is_white:
+        await state.update_data(selected_square=square)
+        await _safe_edit_markup(callback, _board_keyboard(game.fen, my_color, square))
+        await callback.answer()
+        return
+
+    move_uci = selected_square + square
+    piece = board.piece_at(from_idx)
+    if piece and piece.piece_type == chess.PAWN:
+        to_rank = chess.square_rank(to_idx)
+        if (my_is_white and to_rank == 7) or (not my_is_white and to_rank == 0):
+            move_uci += "q"
+
+    updated, error = await service.apply_move(game_id, user_id, move_uci)
+    if error:
+        await callback.answer(f"❌ {error}")
+        await state.update_data(selected_square=None)
+        if updated:
+            await _safe_edit_markup(callback, _board_keyboard(updated.fen, my_color, None))
+        return
+
+    await state.update_data(selected_square=None)
+    status_line = ""
+    keep_playing = True
+    if updated.status == "checkmate":
+        winner_color = "white" if updated.turn == "black" else "black"  # side that just moved
+        winner_is_me = winner_color == my_color.value
+        status_line = "\n🏆 <b>Мат! Вы выиграли!</b>" if winner_is_me else "\n💔 <b>Мат. Вы проиграли.</b>"
+        keep_playing = False
+    elif updated.status == "stalemate":
+        status_line = "\n🤝 <b>Пат! Ничья.</b>"
+        keep_playing = False
+    elif updated.status == "draw":
+        status_line = "\n🤝 <b>Ничья.</b>"
+        keep_playing = False
+
+    move_no = len(updated.moves)
+    next_label = "белые" if updated.turn == "white" else "чёрные"
+    text = (
+        f"♟ Ход №{move_no} · код <code>{updated.code}</code>\n"
+        f"Ваш ход: <code>{move_uci}</code>\n"
+        f"Сейчас ходят: <b>{next_label}</b>"
+        f"{status_line}"
+    )
+
+    if keep_playing:
+        await _safe_edit_text(callback, text, _board_keyboard(updated.fen, my_color, None))
+    else:
+        await state.clear()
+        await _safe_edit_text(callback, text)
+        await callback.message.answer("Главное меню.", reply_markup=_main_keyboard())
     await callback.answer()

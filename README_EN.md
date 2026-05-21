@@ -15,11 +15,16 @@ A full-featured Telegram bot for playing chess against AI powered by **Stockfish
 ## Features
 
 - **Fully button-driven**: the only command is `/start`, everything else through keyboards
-- **Play against Stockfish**: 4 difficulty levels — Easy, Medium, Hard, Expert
-- **8×8 inline-button board** with coloured cells (`⬜`/`⬛`), no rank/file labels
-- **Move highlights**: 🟦 selected piece · 🟢/🟩 possible move · 🟥 possible capture
+- **Three game modes**:
+  - 🤖 **Vs Stockfish** — 8 difficulty levels from Beginner to Grandmaster
+  - 👥 **Hot-seat** — two players on the same device, board flips after every move
+  - 🌐 **Online PvP** — play with a friend using a 6-char invite code (beta)
+- **Piece glyphs for both colours**: white `♔♕♖♗♘♙`, black `♚♛♜♝♞♟`
+- **8×8 inline-button board**, no rank/file labels
+- **Move highlights**: 🟦 selected piece · 🟢 possible move · 🟥 possible capture
 - **Two-tap moves**: tap your piece → tap the target square, auto-promote pawn to queen
 - **Auto-flip** when you play black
+- **Stable board refresh** — `message is not modified` errors suppressed, every move bumps a counter to guarantee a redraw
 - **Player profile**: ELO rating (starts at 1200, K = 32), peak ELO, win-rate, breakdown by difficulty
 - **Game history** — every finished game is recorded in Redis with settings, timestamp (MSK, UTC+3) and full move list; accessible from the profile
 - Best-move hint with position evaluation (REST)
@@ -237,10 +242,14 @@ Open the bot in Telegram and send `/start`. The rest is buttons.
 | -------------------------- | ---------------------------- |
 | Starting rating            | 1200                         |
 | K-factor                   | 32                           |
-| Opponent ELO (Easy)        | 800                          |
-| Opponent ELO (Medium)      | 1400                         |
-| Opponent ELO (Hard)        | 1900                         |
-| Opponent ELO (Expert)      | 2400                         |
+| Opponent ELO (Beginner)        | 500                      |
+| Opponent ELO (Easy)            | 800                      |
+| Opponent ELO (Casual)          | 1100                     |
+| Opponent ELO (Medium)          | 1400                     |
+| Opponent ELO (Advanced)        | 1700                     |
+| Opponent ELO (Hard)            | 1900                     |
+| Opponent ELO (Expert)          | 2200                     |
+| Opponent ELO (Grandmaster)     | 2600                     |
 | Aborted game accounting    | counted as loss (`score = 0`)|
 
 Formula: `delta = K * (actual - expected)`, where `expected = 1 / (1 + 10^((opp_elo - my_elo) / 400))`.
@@ -278,12 +287,16 @@ Server sends:
 
 ## Stockfish difficulty levels
 
-| Level   | Skill Level | Depth | Move time | Opponent ELO |
-| ------- | ----------- | ----- | --------- | ------------ |
-| Easy    | 2           | 4     | 100 ms    | ~800         |
-| Medium  | 8           | 8     | 300 ms    | ~1400        |
-| Hard    | 18          | 14    | 1200 ms   | ~1900        |
-| Expert  | 20          | 22    | 3000 ms   | ~2400        |
+| Level            | Skill Level | Depth | Move time | Opponent ELO |
+| ---------------- | ----------- | ----- | --------- | ------------ |
+| Beginner 🐣      | 0           | 2     | 80 ms     | ~500         |
+| Easy             | 3           | 4     | 150 ms    | ~800         |
+| Casual           | 6           | 6     | 250 ms    | ~1100        |
+| Medium           | 10          | 8     | 400 ms    | ~1400        |
+| Advanced         | 14          | 11    | 700 ms    | ~1700        |
+| Hard             | 17          | 14    | 1200 ms   | ~1900        |
+| Expert           | 20          | 18    | 2500 ms   | ~2200        |
+| Grandmaster 👑   | 20          | 24    | 5000 ms   | ~2600        |
 
 Configuration in [backend/app/engine/config.py](backend/app/engine/config.py).
 
@@ -344,10 +357,12 @@ Auth requires a valid Telegram `initData`, so the WebApp won't authenticate outs
 ## Roadmap
 
 - [x] Button-driven UI, no commands
-- [x] 4 difficulty levels (including Expert)
+- [x] 8 difficulty levels (Beginner → Grandmaster)
 - [x] ELO rating and player profile
 - [x] Game history with replay
-- [ ] PvP (player vs player)
+- [x] Hot-seat (two players on one device)
+- [x] Online PvP with invite codes (beta — sync on click)
+- [ ] Live online PvP with pub/sub push notifications
 - [ ] PGN export
 - [ ] Engine analysis of finished games
 - [ ] Tournaments
