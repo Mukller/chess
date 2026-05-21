@@ -2,17 +2,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.auth.routes import router as auth_router
 from app.bot.bot import TelegramBot
 from app.config import get_settings
 from app.engine.pool import EnginePool
-from app.game.routes import router as game_router
-from app.middleware.rate_limit import RateLimitMiddleware
 from app.storage.redis_client import RedisClient
-from app.ws.gateway import router as ws_router
 
 
 def _configure_logging(level: str) -> None:
@@ -36,16 +31,18 @@ async def lifespan(app: FastAPI):
     try:
         await engine_pool.start()
         app.state.engine_pool = engine_pool
+        logger.info("Stockfish engine pool started")
     except FileNotFoundError:
         logger.error(
-            "Stockfish missing at %s — engine endpoints will respond with 503",
+            "Stockfish missing at %s — bot will not work",
             settings.stockfish_path,
         )
-        app.state.engine_pool = None
+        raise
 
     bot = TelegramBot(engine_pool=app.state.engine_pool)
     await bot.start()
     app.state.bot = bot
+    logger.info("Telegram bot started")
 
     try:
         yield
@@ -61,37 +58,13 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="Telegram Chess Bot API",
+        title="Telegram Chess Bot",
         version=__version__,
         lifespan=lifespan,
-        docs_url=None if settings.is_production else "/docs",
-        redoc_url=None if settings.is_production else "/redoc",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    app.add_middleware(RateLimitMiddleware)
-
-    app.include_router(auth_router)
-    app.include_router(game_router)
-    app.include_router(ws_router)
-
-    @app.get("/health", tags=["health"])
-    async def health() -> dict:
-        redis = RedisClient.instance()
-        ok = await redis.ping()
-        return {
-            "status": "ok" if ok else "degraded",
-            "version": __version__,
-            "engine_ready": getattr(app.state, "engine_pool", None) is not None,
-            "bot_configured": getattr(app.state, "bot", None) is not None
-            and app.state.bot.is_configured,
-        }
 
     return app
 
