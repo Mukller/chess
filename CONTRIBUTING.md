@@ -95,15 +95,261 @@
 
 ## 🇬🇧 English
 
-We use GitHub Flow:
+### Getting Started
 
-1. Fork the repo or branch off `main`.
-2. Use descriptive branch names (`feat/pvp-mode`, `fix/ws-reconnect`).
-3. Keep commits small and focused; conventional commits are appreciated.
-4. Run linters / build locally before opening a PR.
-5. Open a PR against `main` with a clear description, test plan, and screenshots for UI changes.
-6. Be polite and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+1. **Fork & Clone**
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/chess.git
+   cd chess
+   git remote add upstream https://github.com/Mukller/chess.git
+   ```
 
-For security issues, contact the maintainer privately — do not file a public issue.
+2. **Create a Branch**
+   ```bash
+   git fetch upstream && git checkout main && git merge upstream/main
+   git checkout -b feat/your-feature-name
+   # or: git checkout -b fix/your-bug-name
+   ```
 
-By contributing you agree that your work is licensed under the project's [MIT License](LICENSE.md).
+3. **Setup Development Environment**
+   - See [QUICK_START.md](QUICK_START.md) for detailed setup
+   - Backend: `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload`
+   - Frontend: `cd frontend && npm install && npm run dev`
+   - Ensure Redis is running
+
+4. **Make Your Changes**
+   - Write clean, well-documented code
+   - Include tests for new features and bug fixes
+   - Follow the code style guidelines below
+
+5. **Test Locally**
+   ```bash
+   # Backend tests
+   cd backend && pytest tests/ && ruff check app/ && mypy app/
+   
+   # Frontend tests
+   cd frontend && npm test && npm run build
+   ```
+
+6. **Commit & Push**
+   ```bash
+   git add .
+   git commit -m "feat: add description of your change"
+   git push origin feat/your-feature-name
+   ```
+
+7. **Open Pull Request**
+   - Go to https://github.com/Mukller/chess
+   - Click "New Pull Request" and select your branch
+   - Fill in the PR template with clear description
+   - Reference any related issues with `#123`
+
+### Pull Request Template
+
+```markdown
+## Description
+What does this PR do?
+
+## Type
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Documentation
+- [ ] Performance improvement
+
+## Testing
+How did you test this? Steps to reproduce:
+1. ...
+2. ...
+
+## Screenshots (if UI changes)
+Add screenshots for visual changes
+
+## Checklist
+- [ ] Tests added/updated
+- [ ] Code follows style guidelines
+- [ ] Documentation updated
+- [ ] No breaking changes (or documented)
+```
+
+### Code Style
+
+**Backend (Python)**:
+- Type hints required for all public functions
+- Use `ruff format` (or `black`) for formatting
+- Use `ruff check` for linting
+- Specific exception handling (no bare `except`)
+- No blocking I/O in async functions
+- Services independent of FastAPI
+
+**Frontend (TypeScript/React)**:
+- TypeScript strict mode enabled
+- Functional components with hooks only
+- Business logic in custom hooks
+- Zustand stores for state management
+- Tailwind CSS for styling
+
+**Testing**:
+- pytest + pytest-asyncio for backend
+- New features require tests
+- Bug fixes require regression tests
+- Don't mock python-chess (use real rules)
+- Aim for >80% code coverage
+
+### Commit Message Format
+
+Follow [conventional commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <subject>
+
+<body (optional)>
+
+<footer (optional)>
+```
+
+**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
+
+**Scopes**: `api`, `bot`, `game`, `frontend`, `docker`, `redis`
+
+**Examples**:
+- `feat(game): add castling move validation`
+- `fix(bot): handle missing state gracefully`
+- `docs(api): add WebSocket examples`
+- `refactor(storage): extract Redis key formatting`
+- `test(game): add ELO calculation tests`
+
+### Running Tests
+
+```bash
+# Backend
+cd backend
+pytest tests/                    # All tests
+pytest tests/game/              # Single directory
+pytest tests/game/test_service.py::test_create_game  # Single test
+pytest -v                        # Verbose
+pytest --cov=app                # With coverage
+
+# Frontend
+cd frontend
+npm test                         # Run all tests
+npm test Board                   # Single test file
+npm test -- --watch             # Watch mode
+npm test -- --coverage          # Coverage report
+```
+
+### Common Issues
+
+**"Tests failing"**
+```bash
+# Run with verbose output to see actual errors
+pytest -v tests/
+
+# Clear cache
+rm -rf __pycache__ .pytest_cache
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+**"Type checking errors"**
+```bash
+mypy backend/app --pretty
+```
+
+**"Linting issues"**
+```bash
+# Show issues
+ruff check backend/app
+
+# Auto-fix
+ruff check backend/app --fix
+ruff format backend/app
+```
+
+**"Port already in use"**
+```bash
+# Find process (Linux/Mac)
+lsof -i :8000
+# Or (Windows)
+netstat -ano | findstr :8000
+
+# Use different port
+uvicorn app.main:app --port 8001
+```
+
+### Documentation
+
+- Add docstrings to all public functions
+- Update README.md if behavior changes
+- Update API_REFERENCE.md for new endpoints
+- Add examples in QUICK_START.md if applicable
+
+### Performance
+
+**Backend**:
+- ✅ Use async/await for I/O
+- ✅ Cache computed results
+- ✅ Use connection pooling
+- ❌ No blocking I/O in async functions
+
+**Frontend**:
+- ✅ Use React.memo for expensive components
+- ✅ Lazy-load large components
+- ✅ Code-split at routes
+- ❌ Avoid unnecessary re-renders
+
+### Security
+
+**API**:
+- ✅ Validate all user input
+- ✅ Use python-chess for move validation
+- ✅ Verify JWT tokens
+- ✅ Rate limit per user
+- ❌ Don't trust client data
+- ❌ Don't expose internal errors
+
+**Frontend**:
+- ✅ Sanitize user content
+- ✅ Use HTTPS
+- ✅ Validate API responses
+- ❌ No sensitive data in URLs
+- ❌ No eval() on user input
+
+### Release Process
+
+Only maintainers create releases. Versions follow [SemVer](https://semver.org/):
+- `MAJOR` — breaking changes
+- `MINOR` — new features (backward compatible)
+- `PATCH` — bug fixes
+
+Example: `v1.2.3`
+
+### Security Disclosures
+
+**Do not** file public issues for security vulnerabilities. Contact the maintainer privately:
+- GitHub profile: https://github.com/Mukller
+- Or create a private security advisory
+
+### Code of Conduct
+
+Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+### License
+
+By contributing, you agree your work will be licensed under the [MIT License](LICENSE.md).
+
+### Resources
+
+- [QUICK_START.md](QUICK_START.md) — Local development setup
+- [API_REFERENCE.md](API_REFERENCE.md) — REST API documentation
+- [FRONTEND_SETUP.md](FRONTEND_SETUP.md) — React/TypeScript guide
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Common issues
+- [Python Style Guide](https://pep8.org/)
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
+- [React Documentation](https://react.dev)
+
+### Questions?
+
+- Check [GitHub Issues](https://github.com/Mukller/chess/issues)
+- See [GitHub Discussions](https://github.com/Mukller/chess/discussions)
+- Review project documentation
+
+Thank you for contributing! 🙏
