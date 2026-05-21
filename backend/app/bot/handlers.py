@@ -71,6 +71,16 @@ BTN_RESET_STATS = "🗑 Сбросить статистику"
 BTN_ONLINE_HOST = "🆕 Создать игру"
 BTN_ONLINE_JOIN = "🔑 Ввести код"
 
+BOARD_HINT = (
+    "<b>Как ходить:</b>\n"
+    "1. Нажмите свою фигуру — подсветятся возможные ходы.\n"
+    "2. Нажмите клетку назначения — ход выполнится.\n"
+    "   • 🟦 — выбранная фигура\n"
+    "   • 🟢 — возможный ход\n"
+    "   • 🟥 — возможное взятие"
+)
+
+
 DIFFICULTY_BTN_MAP = {
     BTN_DIFF_BEGINNER: Difficulty.BEGINNER,
     BTN_DIFF_EASY:     Difficulty.EASY,
@@ -535,7 +545,7 @@ async def color_choice_handler(message: Message, state: FSMContext, engine_pool=
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
-    await message.answer("Доска:", reply_markup=_board_keyboard(game_state.fen, color, None))
+    await message.answer(BOARD_HINT, parse_mode="HTML", reply_markup=_board_keyboard(game_state.fen, color, None))
 
 
 async def _persist_finished_game(user_id, state_data, final_state, result, elo_update=None) -> None:
@@ -810,7 +820,7 @@ async def hotseat_start_handler(message: Message, state: FSMContext) -> None:
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
-    await message.answer("Доска:", reply_markup=_board_keyboard(fen, Color.WHITE, None))
+    await message.answer(BOARD_HINT, parse_mode="HTML", reply_markup=_board_keyboard(fen, Color.WHITE, None))
 
 
 async def _hotseat_square_handler(callback: CallbackQuery, state: FSMContext) -> None:
@@ -965,7 +975,7 @@ async def online_host_handler(message: Message, state: FSMContext) -> None:
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
-    await message.answer("Доска:", reply_markup=_board_keyboard(game.fen, color, None))
+    await message.answer(BOARD_HINT, parse_mode="HTML", reply_markup=_board_keyboard(game.fen, color, None))
 
 
 @router.message(GameState.online_menu, F.text == BTN_ONLINE_JOIN)
@@ -1016,7 +1026,7 @@ async def online_join_handler(message: Message, state: FSMContext) -> None:
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
-    await message.answer("Доска:", reply_markup=_board_keyboard(game.fen, my_color, None))
+    await message.answer(BOARD_HINT, parse_mode="HTML", reply_markup=_board_keyboard(game.fen, my_color, None))
 
 
 async def _online_square_handler(callback: CallbackQuery, state: FSMContext) -> None:
