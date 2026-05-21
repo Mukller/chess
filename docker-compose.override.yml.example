@@ -1,0 +1,100 @@
+# Production overrides for docker-compose.yml
+# Copy this file to docker-compose.override.yml and customize for your deployment
+#
+# Usage:
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   docker compose up -d
+
+version: "3.9"
+
+services:
+  # Production: run behind Caddy for HTTPS
+  # Local development: comment out the caddy service
+
+  caddy:
+    image: caddy:latest
+    container_name: chess_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - ACME_AGREE=true
+    networks:
+      - chess_net
+    depends_on:
+      - nginx
+
+  # Production: restrict ports, require health check
+  api:
+    expose:
+      - "8000"
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=WARNING
+      # Increase rate limit threshold for production
+      - RATE_LIMIT_PER_MINUTE=60
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Production: restrict port, require build args
+  frontend:
+    expose:
+      - "80"
+    build:
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_WS_BASE_URL: /ws
+
+  # Production: restrict port, depend on api health
+  nginx:
+    ports: []
+    expose:
+      - "80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Production: increase memory limit, enable persistence
+  redis:
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: metrics collection
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: chess_prometheus
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - chess_net
+
+volumes:
+  caddy_data:
+  caddy_config:
+  # prometheus_data:
+
+networks:
+  chess_net:
+    driver: bridge

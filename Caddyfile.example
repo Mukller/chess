@@ -1,0 +1,49 @@
+# Caddy configuration for HTTPS reverse proxy
+# Copy to Caddyfile and customize for your domain
+#
+# Usage:
+#   cp Caddyfile.example Caddyfile
+#   Edit domain name below
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+
+# Replace your-domain.com with your actual domain
+your-domain.com {
+    # Reverse proxy to Nginx
+    reverse_proxy nginx:80
+
+    # Enable gzip compression
+    encode gzip
+
+    # Security headers
+    header / {
+        # HSTS: enforce HTTPS for 1 year
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+
+        # Allow framing only from Telegram WebApp
+        X-Frame-Options "ALLOW-FROM https://web.telegram.org"
+        Content-Security-Policy "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
+
+        # Prevent XSS
+        X-XSS-Protection "1; mode=block"
+
+        # No referrer leakage
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Optional: rate limiting per IP
+    # rate_limit {path} 100 by {remote_host}
+}
+
+# Optional: redirect www subdomain
+www.your-domain.com {
+    redir https://your-domain.com{uri} permanent
+}
+
+# Optional: configure for multiple domains
+# your-domain2.com {
+#     reverse_proxy nginx:80
+#     header / Strict-Transport-Security "max-age=31536000; includeSubDomains"
+# }
