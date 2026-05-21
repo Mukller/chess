@@ -44,6 +44,7 @@ class TelegramBot:
         )
         self._dispatcher = Dispatcher()
         self._dispatcher["engine_pool"] = self._engine_pool
+        self._dispatcher["bot"] = self._bot
         self._dispatcher.include_router(handlers_router)
         self._task = asyncio.create_task(self._run_polling(), name="telegram-bot-polling")
         logger.info("telegram bot polling started")

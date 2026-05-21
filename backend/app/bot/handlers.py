@@ -1,7 +1,7 @@
 import logging
 import random
 import time
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
 from aiogram.types import (
     ReplyKeyboardMarkup,
@@ -24,6 +24,30 @@ from app.game.online import OnlineService
 
 logger = logging.getLogger(__name__)
 router = Router(name="chess-handlers")
+
+# =================== MESSAGE REPLY BUTTONS ===================
+
+def _get_message_keyboard(message_id: int) -> InlineKeyboardMarkup:
+    """Create keyboard for message reply options."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💬 Ответить", callback_data=f"reply_{message_id}"),
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_{message_id}"),
+        ],
+        [
+            InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_{message_id}"),
+        ]
+    ])
+
+
+def _get_topic_name(user) -> str:
+    """Get forum topic name from user (username or ID)."""
+    if user.username:
+        return f"@{user.username}"
+    elif user.first_name:
+        return user.first_name
+    else:
+        return f"User {user.id}"
 
 
 # =================== PIECE GLYPHS (both colours) ===================
@@ -276,19 +300,25 @@ def _format_profile(stats) -> str:
     lines = [
         "<b>👤 Профиль</b>",
         "",
-        f"🏆 <b>ELO:</b> {stats.elo} (рекорд: {stats.peak_elo})",
-        f"🎮 Всего партий: <b>{stats.games_played}</b>",
-        f"✅ Побед: <b>{stats.wins}</b>    ❌ Поражений: <b>{stats.losses}</b>    🤝 Ничьих: <b>{stats.draws}</b>",
-        f"📈 Винрейт: <b>{win_rate:.1f}%</b>",
+        f"<b>ELO рейтинг</b>",
+        f"🏆 Текущий: <code>{stats.elo}</code>",
+        f"🎖 Рекорд: <code>{stats.peak_elo}</code>",
+        "",
+        f"<b>Статистика</b>",
+        f"🎮 Всего партий: <code>{stats.games_played}</code>",
+        f"✅ Побед: <code>{stats.wins}</code>",
+        f"❌ Поражений: <code>{stats.losses}</code>",
+        f"🤝 Ничьих: <code>{stats.draws}</code>",
+        f"📈 Винрейт: <code>{win_rate:.1f}%</code>",
     ]
     if stats.by_difficulty:
         lines.append("")
-        lines.append("<b>По уровням:</b>")
+        lines.append("<b>По уровням сложности</b>")
         for d in Difficulty:
             ds = stats.by_difficulty.get(d.value)
             if ds and ds.played > 0:
                 lines.append(
-                    f"• {DIFFICULTY_NAMES[d]}: {ds.played} (П:{ds.wins} / Пр:{ds.losses} / Н:{ds.draws})"
+                    f"  • {DIFFICULTY_NAMES[d]}: <code>{ds.played}</code> п. (В:{ds.wins} П:{ds.losses} Н:{ds.draws})"
                 )
     return "\n".join(lines)
 
@@ -310,16 +340,15 @@ def _safe_difficulty_label(value: str) -> str:
 
 def _format_history_list(entries, total: int) -> tuple[str, InlineKeyboardMarkup]:
     if not entries:
-        return ("📜 <b>История игр пуста.</b>\n\nСыграйте партию, и она появится здесь.",
+        return ("📜 <b>История игр</b>\n\n<i>Пусто — сыграйте первую партию!</i>",
                 InlineKeyboardMarkup(inline_keyboard=[]))
-    lines = [f"<b>📜 История игр</b> (всего: {total})", ""]
+    lines = [f"<b>📜 История игр</b> — всего: <code>{total}</code>", ""]
     rows: list[list[InlineKeyboardButton]] = []
     for i, e in enumerate(entries, 1):
         diff = _safe_difficulty_label(e.difficulty)
         color_t = "♔" if e.user_color == Color.WHITE.value else "♚"
         lines.append(
-            f"{i}. {_result_emoji(e.result)} <b>{_result_text(e.result)}</b> "
-            f"{color_t} · {diff} · {len(e.moves_uci)} ходов · {e.finished_at}"
+            f"{i}. {_result_emoji(e.result)} <b>{_result_text(e.result)}</b> {color_t} {diff} · {len(e.moves_uci)} ходов"
         )
         rows.append([InlineKeyboardButton(
             text=f"#{i} {_result_emoji(e.result)} {diff}",
@@ -330,14 +359,14 @@ def _format_history_list(entries, total: int) -> tuple[str, InlineKeyboardMarkup
 
 def _format_history_entry(e: GameHistoryEntry) -> str:
     diff = _safe_difficulty_label(e.difficulty)
-    color_t = "белые" if e.user_color == Color.WHITE.value else "чёрные"
+    color_t = "♔ Белые" if e.user_color == Color.WHITE.value else "♚ Чёрные"
     duration = ""
     try:
         from datetime import datetime
         s = datetime.strptime(e.started_at, "%Y-%m-%d %H:%M:%S")
         f = datetime.strptime(e.finished_at, "%Y-%m-%d %H:%M:%S")
         secs = int((f - s).total_seconds())
-        duration = f"⏱ {secs // 60} мин {secs % 60} сек\n"
+        duration = f"⏱️ <code>{secs // 60}:{secs % 60:02d}</code>\n"
     except Exception:
         pass
     moves_block = ""
@@ -348,16 +377,19 @@ def _format_history_entry(e: GameHistoryEntry) -> str:
             w = e.moves_uci[i]
             b = e.moves_uci[i + 1] if i + 1 < len(e.moves_uci) else ""
             rendered.append(f"{num}. {w} {b}".strip())
-        moves_block = "\n\n<b>Ходы:</b>\n<code>" + " ".join(rendered) + "</code>"
+        moves_block = "\n\n<b>📝 Ходы</b>\n<code>" + " ".join(rendered) + "</code>"
     return (
-        f"<b>{_result_emoji(e.result)} {_result_text(e.result)}</b>\n\n"
-        f"🎯 Уровень: <b>{diff}</b>\n"
-        f"♔ Вы играли: <b>{color_t}</b>\n"
-        f"🕐 Начало: <code>{e.started_at}</code> (МСК)\n"
-        f"🏁 Конец: <code>{e.finished_at}</code> (МСК)\n"
+        f"<b>{_result_emoji(e.result)} {_result_text(e.result)}</b>\n"
+        f"\n<b>📊 Информация</b>\n"
+        f"🎯 Уровень: <code>{diff}</code>\n"
+        f"♟️ Фигуры: <code>{color_t}</code>\n"
+        f"📍 Ходов: <code>{len(e.moves_uci)}</code>\n"
         f"{duration}"
-        f"📊 ELO: {e.elo_before} → <b>{e.elo_after}</b> ({e.elo_delta:+d})\n"
-        f"♟ Ходов: <b>{len(e.moves_uci)}</b>"
+        f"\n<b>⏰ Время</b>\n"
+        f"🕐 Начало: <code>{e.started_at}</code>\n"
+        f"🏁 Конец: <code>{e.finished_at}</code>\n"
+        f"\n<b>📈 Рейтинг</b>\n"
+        f"Было: <code>{e.elo_before}</code> → Стало: <code>{e.elo_after}</code> ({e.elo_delta:+d})"
         f"{moves_block}"
     )
 
@@ -384,19 +416,102 @@ def _restore_difficulty(value) -> Difficulty:
     return Difficulty.MEDIUM
 
 
+# =================== FORUM TOPIC MESSAGE HANDLER ===================
+
+@router.message()
+async def group_message_handler(message: Message, bot: Bot) -> None:
+    """Handle incoming messages in the group - forward to main chat."""
+    try:
+        # Only handle messages in groups/supergroups
+        if message.chat.type not in ("group", "supergroup"):
+            return
+
+        # Skip messages from bot itself
+        if message.from_user.is_bot:
+            return
+
+        # Skip service messages (joins, leaves, etc.)
+        if message.content_type != "text":
+            return
+
+        # Get the group chat ID from config
+        from app.config import get_settings
+        settings = get_settings()
+        group_chat_id = settings.group_chat_id
+
+        # Only process messages in the configured group
+        if message.chat.id != group_chat_id:
+            return
+
+        user = message.from_user
+        username = user.username or user.first_name or str(user.id)
+
+        logger.info(f"Group message from {username}: {message.text}")
+
+        # Just log the message for now - don't try to create topics
+        # (forum topics require specific permissions and setup)
+
+    except Exception as e:
+        logger.exception(f"Error in group_message_handler: {e}")
+
+
+@router.callback_query(F.data.startswith("reply_"))
+async def reply_callback_handler(callback: CallbackQuery) -> None:
+    """Handle reply button click."""
+    try:
+        message_id = callback.data.split("_", 1)[1]
+        await callback.answer(
+            f"Ответ на сообщение #{message_id}",
+            show_alert=False
+        )
+        # TODO: Implement reply functionality
+    except Exception as e:
+        logger.exception(f"Error in reply handler: {e}")
+        await callback.answer("❌ Ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("edit_"))
+async def edit_callback_handler(callback: CallbackQuery) -> None:
+    """Handle edit button click."""
+    try:
+        message_id = callback.data.split("_", 1)[1]
+        await callback.answer(
+            f"Редактирование сообщения #{message_id}",
+            show_alert=False
+        )
+        # TODO: Implement edit functionality
+    except Exception as e:
+        logger.exception(f"Error in edit handler: {e}")
+        await callback.answer("❌ Ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("delete_"))
+async def delete_callback_handler(callback: CallbackQuery) -> None:
+    """Handle delete button click."""
+    try:
+        message_id = callback.data.split("_", 1)[1]
+        # Delete the message from the topic
+        await callback.message.delete()
+        await callback.answer("✅ Сообщение удалено", show_alert=False)
+    except Exception as e:
+        logger.exception(f"Error in delete handler: {e}")
+        await callback.answer("❌ Ошибка при удалении", show_alert=True)
+
+
 # =================== /START + MAIN MENU ===================
 
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
     text = (
-        "♟️ <b>Telegram Chess Bot</b>\n\n"
-        "Выберите режим в нижнем меню:\n"
-        "• <b>Играть с ботом</b> — против Stockfish, 8 уровней\n"
-        "• <b>Двое на одном</b> — игра на одном устройстве\n"
-        "• <b>Онлайн PvP</b> — игра с другом по коду\n"
-        "• <b>Профиль</b> — статистика, ELO, история\n"
-        "• <b>Помощь</b> — справка"
+        "<b>♟️ Telegram Chess Bot</b>\n\n"
+        "Выберите режим игры:\n"
+        "  • <b>Играть с ботом</b> — Stockfish, 8 уровней\n"
+        "  • <b>Двое на одном</b> — на одном устройстве\n"
+        "  • <b>Онлайн PvP</b> — с другом по коду\n\n"
+        "Другое:\n"
+        "  • <b>Профиль</b> — статистика и рейтинг\n"
+        "  • <b>Помощь</b> — справка"
     )
     await message.answer(text, reply_markup=_main_keyboard(), parse_mode="HTML")
 
@@ -405,18 +520,19 @@ async def start_handler(message: Message, state: FSMContext) -> None:
 async def help_handler(message: Message) -> None:
     text = (
         "<b>❓ Помощь</b>\n\n"
-        "<b>Режимы:</b>\n"
-        "• <b>Играть с ботом</b> — против Stockfish, 8 уровней сложности (от Новичка до Гроссмейстера)\n"
-        "• <b>Двое на одном</b> — два игрока ходят по очереди на одном телефоне, доска статична\n"
-        "• <b>Онлайн PvP</b> — играйте с другом: создайте игру и поделитесь кодом\n\n"
-        "<b>Управление:</b>\n"
-        "1. Нажмите свою фигуру — подсветятся возможные ходы\n"
-        "2. Нажмите клетку назначения — ход выполнится\n"
-        "   • 🟦 — выбранная фигура\n"
-        "   • 🟢 — возможный ход\n"
-        "   • 🟥 — возможное взятие\n"
-        "3. Завершить партию — <b>🛑 Остановить игру</b> снизу\n\n"
-        "<b>Обозначения фигур:</b>\n"
+        "<b>🎮 Режимы игры</b>\n"
+        "  • <b>Играть с ботом</b> — 8 уровней (Новичок → Гроссмейстер)\n"
+        "  • <b>Двое на одном</b> — по очереди на одном устройстве\n"
+        "  • <b>Онлайн PvP</b> — с другом по коду приглашения\n\n"
+        "<b>♟️ Как ходить</b>\n"
+        "  1. Нажмите свою фигуру → подсветятся ходы\n"
+        "  2. Выберите клетку назначения\n"
+        "  3. Ход выполнится\n\n"
+        "<b>🎨 Обозначения клеток</b>\n"
+        "  🟦 — выбранная фигура\n"
+        "  🟢 — возможный ход\n"
+        "  🟥 — взятие фигуры\n\n"
+        "<b>♔ Фигуры</b>\n"
         "Белые: ♔ ♕ ♖ ♗ ♘ ♙\n"
         "Чёрные: ♚ ♛ ♜ ♝ ♞ ♟"
     )
@@ -436,7 +552,7 @@ async def profile_handler(message: Message, state: FSMContext) -> None:
 async def reset_stats_handler(message: Message) -> None:
     stats = await StatsService().reset(message.from_user.id)
     await message.answer(
-        "♻️ Статистика сброшена.\n\n" + _format_profile(stats),
+        "<b>♻️ Статистика сброшена</b>\n\n" + _format_profile(stats),
         reply_markup=_profile_keyboard(),
         parse_mode="HTML",
     )
@@ -451,7 +567,7 @@ async def history_handler(message: Message) -> None:
     text, markup = _format_history_list(entries, total)
     await message.answer(text, reply_markup=_profile_keyboard(), parse_mode="HTML")
     if entries:
-        await message.answer("Выберите партию для просмотра:", reply_markup=markup)
+        await message.answer("<b>Выберите партию для просмотра:</b>", reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("hist:"))
@@ -471,9 +587,9 @@ async def history_entry_handler(callback: CallbackQuery) -> None:
 async def play_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(GameState.selecting_difficulty)
-    lines = ["<b>Выберите уровень сложности:</b>", ""]
+    lines = ["<b>🎯 Выберите уровень сложности</b>", ""]
     for d in Difficulty:
-        lines.append(f"• <b>{DIFFICULTY_NAMES[d]}</b> — ELO ~{OPPONENT_ELO[d]}")
+        lines.append(f"  • <b>{DIFFICULTY_NAMES[d]}</b> — <code>ELO ~{OPPONENT_ELO[d]}</code>")
     await message.answer("\n".join(lines), reply_markup=_difficulty_keyboard(), parse_mode="HTML")
 
 
@@ -483,11 +599,12 @@ async def difficulty_choice_handler(message: Message, state: FSMContext) -> None
     await state.update_data(difficulty=difficulty.value)
     await state.set_state(GameState.selecting_color)
     text = (
-        f"🎯 Уровень: <b>{_difficulty_text(difficulty)}</b>\n\n"
-        "<b>Выберите цвет фигур:</b>\n\n"
-        "⚪ <b>Белые</b> — вы ходите первым\n"
-        "⚫ <b>Чёрные</b> — компьютер ходит первым\n"
-        "🎲 <b>Случайно</b>"
+        f"<b>🎯 Уровень выбран</b>\n"
+        f"<code>{_difficulty_text(difficulty)}</code>\n\n"
+        f"<b>♟️ Выберите цвет фигур</b>\n\n"
+        f"⚪ <b>Белые</b> — вы ходите первым\n"
+        f"⚫ <b>Чёрные</b> — компьютер ходит первым\n"
+        f"🎲 <b>Случайно</b>"
     )
     await message.answer(text, reply_markup=_color_keyboard(), parse_mode="HTML")
 
@@ -497,10 +614,10 @@ async def back_universal_handler(message: Message, state: FSMContext) -> None:
     current = await state.get_state()
     if current == GameState.selecting_color.state:
         await state.set_state(GameState.selecting_difficulty)
-        await message.answer("Выберите уровень сложности:", reply_markup=_difficulty_keyboard())
+        await message.answer("<b>🎯 Выберите уровень сложности</b>", reply_markup=_difficulty_keyboard(), parse_mode="HTML")
         return
     await state.clear()
-    await message.answer("Главное меню.", reply_markup=_main_keyboard())
+    await message.answer("<b>📋 Главное меню</b>", reply_markup=_main_keyboard(), parse_mode="HTML")
 
 
 @router.message(GameState.selecting_color, F.text.in_({BTN_COLOR_WHITE, BTN_COLOR_BLACK, BTN_COLOR_RANDOM}))
@@ -540,8 +657,9 @@ async def color_choice_handler(message: Message, state: FSMContext, engine_pool=
     )
 
     await message.answer(
-        f"<b>🎮 Партия началась</b>\n"
-        f"🎯 Уровень: {_difficulty_text(difficulty)}    ♔ Вы играете: {_color_text(color)}",
+        f"<b>🎮 Партия началась!</b>\n\n"
+        f"🎯 Уровень: <code>{_difficulty_text(difficulty)}</code>\n"
+        f"♟️ Цвет: <code>{_color_text(color)}</code>",
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
@@ -614,7 +732,7 @@ async def online_stop_handler(message: Message, state: FSMContext) -> None:
 
 @router.message(F.text == BTN_STOP)
 async def stop_no_game_handler(message: Message) -> None:
-    await message.answer("Нет активной партии.", reply_markup=_main_keyboard())
+    await message.answer("<b>⚠️ Нет активной партии</b>", reply_markup=_main_keyboard(), parse_mode="HTML")
 
 
 # =================== AI: SQUARE CLICK (board callback) ===================
@@ -657,7 +775,7 @@ async def _ai_square_handler(callback: CallbackQuery, state: FSMContext, engine_
     selected_square = data.get("selected_square")
 
     if not game_id:
-        await callback.answer("❌ Игра не инициализирована. Нажмите ♟️ Играть с ботом.", show_alert=True)
+        await callback.answer("❌ Игра не инициализирована", show_alert=True)
         return
 
     game_service = GameService()
@@ -781,9 +899,9 @@ async def _ai_square_handler(callback: CallbackQuery, state: FSMContext, engine_
     # Always include a move counter so message text is unique → edit_text always succeeds
     move_no = len(game_state.moves)
     text = (
-        f"♟ Ход №{move_no}\n"
-        f"👤 Ваш ход: <code>{move_uci}</code>\n"
-        f"🤖 Ход компьютера: <code>{engine_move}</code>"
+        f"<b>♟️ Ход №{move_no}</b>\n"
+        f"👤 Вы: <code>{move_uci}</code>\n"
+        f"🤖 Бот: <code>{engine_move}</code>"
         f"{status_text}"
     )
 
@@ -793,8 +911,9 @@ async def _ai_square_handler(callback: CallbackQuery, state: FSMContext, engine_
         await state.clear()
         await _safe_edit_text(callback, text)
         await callback.message.answer(
-            "Нажмите ♟️ Играть с ботом для новой партии.",
+            "<b>🎮 Партия завершена</b>\n\nВыберите режим для новой игры:",
             reply_markup=_main_keyboard(),
+            parse_mode="HTML",
         )
     await callback.answer()
 
@@ -814,9 +933,9 @@ async def hotseat_start_handler(message: Message, state: FSMContext) -> None:
         started_at=now_msk_iso(),
     )
     await message.answer(
-        "<b>👥 Hot-seat: двое на одном устройстве</b>\n\n"
-        "Игроки ходят по очереди. Доска всегда показывается с позиции белых.\n"
-        "Сейчас ходят: <b>белые</b> (♔♕♖♗♘♙)",
+        "<b>👥 Hot-seat игра</b>\n\n"
+        "Ходы по очереди на одном устройстве\n\n"
+        "Сейчас ходят: <code>♔ Белые</code>",
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
@@ -920,12 +1039,12 @@ async def _hotseat_square_handler(callback: CallbackQuery, state: FSMContext) ->
     )
 
     move_no = len(moves)
-    side_label = "белых" if turn == "white" else "чёрных"
-    next_label = "белые" if new_turn == "white" else "чёрные"
+    side_label = "Белые" if turn == "white" else "Чёрные"
+    next_label = "♔ Белые" if new_turn == "white" else "♚ Чёрные"
     text = (
-        f"♟ Ход №{move_no}\n"
-        f"Ход {side_label}: <code>{move_uci}</code>\n"
-        f"Сейчас ходят: <b>{next_label}</b>"
+        f"<b>♟️ Ход №{move_no}</b>\n"
+        f"{side_label}: <code>{move_uci}</code>\n"
+        f"Сейчас: <code>{next_label}</code>"
         f"{status_text}"
     )
 
@@ -934,7 +1053,7 @@ async def _hotseat_square_handler(callback: CallbackQuery, state: FSMContext) ->
     else:
         await state.clear()
         await _safe_edit_text(callback, text)
-        await callback.message.answer("Главное меню.", reply_markup=_main_keyboard())
+        await callback.message.answer("<b>🎮 Партия завершена</b>\n\nГлавное меню:", reply_markup=_main_keyboard(), parse_mode="HTML")
     await callback.answer()
 
 
@@ -945,9 +1064,9 @@ async def online_menu_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(GameState.online_menu)
     text = (
         "<b>🌐 Онлайн PvP</b>\n\n"
-        "• <b>Создать игру</b> — получите код, передайте другу.\n"
-        "• <b>Ввести код</b> — присоединитесь к игре друга.\n\n"
-        "<i>⚠ Live-режим пока в бете: ходы соперника подгружаются по клику на доску.</i>"
+        "• <b>Создать игру</b> — вы получите код для друга\n"
+        "• <b>Ввести код</b> — присоединитесь к игре\n\n"
+        "<i>⚠️ Live-режим в бете: ходы подгружаются по клику</i>"
     )
     await message.answer(text, reply_markup=_online_menu_keyboard(), parse_mode="HTML")
 
@@ -968,8 +1087,8 @@ async def online_host_handler(message: Message, state: FSMContext) -> None:
     color_label = "белыми" if color == Color.WHITE else "чёрными"
     await message.answer(
         f"<b>🌐 Игра создана!</b>\n\n"
-        f"Код: <code>{game.code}</code>\n"
-        f"Вы играете: <b>{color_label}</b>\n\n"
+        f"Код игры: <code>{game.code}</code>\n"
+        f"Цвет: <code>{color_label}</code>\n\n"
         f"Передайте код другу. Когда он присоединится, доска оживёт.\n"
         f"Нажмите на доску, чтобы обновить состояние.",
         reply_markup=_game_keyboard(),
@@ -982,11 +1101,13 @@ async def online_host_handler(message: Message, state: FSMContext) -> None:
 async def online_join_prompt_handler(message: Message, state: FSMContext) -> None:
     await state.set_state(GameState.online_waiting_code)
     await message.answer(
-        "Введите 6-значный код игры:",
+        "<b>🌐 Ввод кода игры</b>\n\n"
+        "Введите 6-значный код от хоста:",
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text=BTN_BACK)]],
             resize_keyboard=True,
         ),
+        parse_mode="HTML",
     )
 
 
@@ -1020,9 +1141,10 @@ async def online_join_handler(message: Message, state: FSMContext) -> None:
     )
     label = "белыми" if my_color == Color.WHITE else "чёрными"
     await message.answer(
-        f"<b>🌐 Вы присоединились к игре <code>{game.code}</code></b>\n"
-        f"Соперник: {game.host_username or 'host'}\n"
-        f"Вы играете: <b>{label}</b>",
+        f"<b>🌐 Вы присоединились!</b>\n\n"
+        f"Код: <code>{game.code}</code>\n"
+        f"Соперник: <code>{game.host_username or 'host'}</code>\n"
+        f"Цвет: <code>{label}</code>",
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
     )
@@ -1138,9 +1260,9 @@ async def _online_square_handler(callback: CallbackQuery, state: FSMContext) -> 
     move_no = len(updated.moves)
     next_label = "белые" if updated.turn == "white" else "чёрные"
     text = (
-        f"♟ Ход №{move_no} · код <code>{updated.code}</code>\n"
-        f"Ваш ход: <code>{move_uci}</code>\n"
-        f"Сейчас ходят: <b>{next_label}</b>"
+        f"<b>♟️ Ход №{move_no}</b>\n\n"
+        f"Ход: <code>{move_uci}</code>\n"
+        f"Ходят: <code>{next_label}</code>"
         f"{status_line}"
     )
 

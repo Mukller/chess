@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_bot_username: str = ""
     telegram_webapp_url: str = ""
+    group_chat_id: int = 0
 
     redis_url: str = "redis://localhost:6379/0"
     redis_game_ttl_seconds: int = 24 * 60 * 60
