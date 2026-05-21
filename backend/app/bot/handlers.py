@@ -407,7 +407,7 @@ async def help_handler(message: Message) -> None:
         "<b>❓ Помощь</b>\n\n"
         "<b>Режимы:</b>\n"
         "• <b>Играть с ботом</b> — против Stockfish, 8 уровней сложности (от Новичка до Гроссмейстера)\n"
-        "• <b>Двое на одном</b> — два игрока ходят по очереди на одном телефоне, доска переворачивается\n"
+        "• <b>Двое на одном</b> — два игрока ходят по очереди на одном телефоне, доска статична\n"
         "• <b>Онлайн PvP</b> — играйте с другом: создайте игру и поделитесь кодом\n\n"
         "<b>Управление:</b>\n"
         "1. Нажмите свою фигуру — подсветятся возможные ходы\n"
@@ -815,7 +815,7 @@ async def hotseat_start_handler(message: Message, state: FSMContext) -> None:
     )
     await message.answer(
         "<b>👥 Hot-seat: двое на одном устройстве</b>\n\n"
-        "Игроки ходят по очереди. После каждого хода доска переворачивается.\n"
+        "Игроки ходят по очереди. Доска всегда показывается с позиции белых.\n"
         "Сейчас ходят: <b>белые</b> (♔♕♖♗♘♙)",
         reply_markup=_game_keyboard(),
         parse_mode="HTML",
@@ -832,7 +832,7 @@ async def _hotseat_square_handler(callback: CallbackQuery, state: FSMContext) ->
     moves: list = list(data.get("hs_moves") or [])
 
     board = chess.Board(fen)
-    perspective = Color.WHITE if turn == "white" else Color.BLACK
+    perspective = Color.WHITE  # Always show board from white's perspective (no flip)
 
     if selected_square is None:
         try:
@@ -897,7 +897,7 @@ async def _hotseat_square_handler(callback: CallbackQuery, state: FSMContext) ->
     moves.append(move.uci())
     new_fen = board.fen()
     new_turn = "black" if turn == "white" else "white"
-    new_perspective = Color.BLACK if new_turn == "black" else Color.WHITE
+    new_perspective = Color.WHITE  # Always show board from white's perspective (no flip)
 
     status_text = ""
     keep_playing = True
