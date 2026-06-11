@@ -1,14 +1,18 @@
 # Telegram Chess Bot
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
-[![aiogram 3](https://img.shields.io/badge/aiogram-3-2CA5E0.svg)](https://docs.aiogram.dev/)
-[![React 18](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE.md)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://www.python.org/)
+[![maintained](https://img.shields.io/badge/maintained%3F-yes-green?style=flat-square)](https://github.com/Mukller/chess)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+
+[English](README_EN.md) • Русский
+
+</div>
 
 Полноценный Telegram-бот для игры в шахматы против AI на базе **Stockfish**. Полностью кнопочный интерфейс прямо внутри чата — доска как сетка inline-кнопок, без необходимости запускать WebApp. Также включён React WebApp как опциональный режим.
 
-> 🇬🇧 English version: [README_EN.md](README_EN.md)
 
 ---
 
