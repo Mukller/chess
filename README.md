@@ -6,28 +6,8 @@
 
 </div>
 
----
-
-<input type="radio" id="lang-en" name="language" checked style="display:none;">
-<input type="radio" id="lang-ru" name="language" style="display:none;">
-
-<div style="text-align: center; margin: 20px 0;">
-  <label for="lang-en" style="display: inline-block; padding: 12px 24px; background: #58A6FF; color: white; border-radius: 6px 0 0 6px; cursor: pointer; font-weight: bold; margin-right: -4px; user-select: none;">English</label><label for="lang-ru" style="display: inline-block; padding: 12px 24px; background: #30363D; color: white; border-radius: 0 6px 6px 0; cursor: pointer; font-weight: bold; user-select: none;">Русский</label>
-</div>
-
-<style>
-  input[type="radio"] { display: none !important; }
-  #lang-en:checked ~ div.lang-en { display: block; }
-  #lang-en:checked ~ div.lang-ru { display: none; }
-  #lang-ru:checked ~ div.lang-en { display: none; }
-  #lang-ru:checked ~ div.lang-ru { display: block; }
-  .lang-en { display: block; }
-  .lang-ru { display: none; }
-</style>
-
----
-
-<div class="lang-en">
+<details open>
+<summary><strong>📖 English</strong></summary>
 ## English Version
 
 <h2 id="readme-english">📖 English Version</h2>
@@ -49,6 +29,15 @@ A full-featured Telegram bot for playing chess against AI powered by **Stockfish
 
 ---
 
+</details>
+
+<details>
+<summary><strong>📖 Русский</strong></summary>
+
+> 🇷🇺 Русская версия: [README.md](README.md)
+
+---
+
 </div>
 
 <div class=lang-ru>
@@ -59,3 +48,5 @@ A full-featured Telegram bot for playing chess against AI powered by **Stockfish
 ## Русская версия
 
 </div>
+
+</details>
