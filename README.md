@@ -1,4 +1,19 @@
-# Telegram Chess Bot
+# Шахматный Telegram Бот
+
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE.md)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat-square&logo=python)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-latest-green?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react)](https://react.dev/)
+[![Telegram](https://img.shields.io/badge/Telegram-Bot-blue?style=flat-square&logo=telegram)](https://telegram.org/)
+[![maintained](https://img.shields.io/badge/maintained%3F-yes-green?style=flat-square)](https://github.com/Mukller/chess)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
+
+[English](#-description) • [Русский](#-описание)
+
+</div>
+
 
 <div align="center">
 
