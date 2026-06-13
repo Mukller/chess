@@ -6,8 +6,18 @@
 
 </div>
 
-<details open>
-<summary><strong>📖 English</strong></summary>
+<div style="text-align: center; margin: 25px 0;">
+  <a href="#readme-english" style="padding: 10px 20px; background: #58A6FF; color: white; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin: 0 8px;">📖 English</a>
+  <span style="color: #666; margin: 0 5px;">•</span>
+  <a href="#readme-russian" style="padding: 10px 20px; background: #30363D; color: white; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin: 0 8px;">📖 Русский</a>
+</div>
+
+---
+
+<h2 id="readme-english">📖 English Version</h2>
+
+
+
 
 # Telegram Chess Bot
 
@@ -400,11 +410,12 @@ MIT — see [LICENSE.md](LICENSE.md).
 - GitHub: [@Mukller](https://github.com/Mukller)
 - Issues: [github.com/Mukller/chess/issues](https://github.com/Mukller/chess/issues)
 
+---
 
-</details>
+<h2 id="readme-russian">📖 Русская версия</h2>
 
-<details>
-<summary><strong>📖 Русский</strong></summary>
+
+
 
 # Шахматный Telegram Бот
 
@@ -814,5 +825,3 @@ MIT — см. [LICENSE.md](LICENSE.md).
 
 - GitHub: [@Mukller](https://github.com/Mukller)
 - Issues: [github.com/Mukller/chess/issues](https://github.com/Mukller/chess/issues)
-
-</details>
