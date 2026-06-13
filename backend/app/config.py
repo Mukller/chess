@@ -17,7 +17,14 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     app_log_level: str = "INFO"
-    app_secret_key: str = Field(default="change-me", min_length=8)
+    app_secret_key: str = Field(default="", min_length=8)
+
+    @field_validator("app_secret_key", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v):
+        if not v or v == "change-me":
+            raise ValueError("app_secret_key MUST be set in .env file - no hardcoded default!")
+        return v
 
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 24 * 60
