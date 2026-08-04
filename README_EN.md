@@ -10,6 +10,10 @@ A full-featured Telegram bot for playing chess against AI powered by **Stockfish
 
 > 🇷🇺 Русская версия: [README.md](README.md)
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="Game screen: board, hint panel, move history" width="420" />
+</p>
+
 ---
 
 ## Features

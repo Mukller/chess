@@ -10,6 +10,10 @@
 
 > 🇬🇧 English version: [README_EN.md](README_EN.md)
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="Игровой экран: доска, подсказка, история ходов" width="420" />
+</p>
+
 ---
 
 ## Возможности
