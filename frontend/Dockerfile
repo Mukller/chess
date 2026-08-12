@@ -22,4 +22,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
+RUN useradd -m -u 1000 appuser 2>/dev/null || true
+RUN chown -R appuser:appuser /app 2>/dev/null || true
+USER appuser
 CMD ["nginx", "-g", "daemon off;"]
