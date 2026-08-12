@@ -76,3 +76,7 @@ class TelegramBot:
         self._dispatcher = None
         self._bot = None
         logger.info("telegram bot shutdown complete")
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-22 01:04:46 +0300

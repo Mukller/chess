@@ -163,3 +163,7 @@ class EnginePool:
             except asyncio.QueueEmpty:
                 break
         self._started = False
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:51:50 +0300

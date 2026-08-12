@@ -54,3 +54,7 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-22 01:04:46 +0300

@@ -85,3 +85,7 @@ def verify_init_data(
         raise InvalidInitDataError("user payload is not valid JSON") from exc
 
     return TelegramUser.from_dict(user_dict)
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:47:10 +0300

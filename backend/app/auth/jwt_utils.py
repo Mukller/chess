@@ -31,3 +31,7 @@ def decode_access_token(token: str) -> dict:
         raise InvalidTokenError("token expired") from exc
     except jwt.InvalidTokenError as exc:
         raise InvalidTokenError("invalid token") from exc
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:47:10 +0300

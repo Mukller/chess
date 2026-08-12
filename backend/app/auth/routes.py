@@ -54,3 +54,7 @@ async def login_telegram(payload: LoginRequest) -> LoginResponse:
             photo_url=user.photo_url,
         ),
     )
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:47:10 +0300

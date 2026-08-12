@@ -24,3 +24,7 @@ DIFFICULTY_PROFILES: dict[Difficulty, DifficultyProfile] = {
 
 def profile_for(difficulty: Difficulty) -> DifficultyProfile:
     return DIFFICULTY_PROFILES.get(difficulty, DIFFICULTY_PROFILES[Difficulty.MEDIUM])
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 23:16:07 +0300

@@ -30,3 +30,7 @@ export function applyTelegramTheme(tg: TelegramWebApp | null): void {
     if (value) root.style.setProperty(name, value);
   }
 }
+
+// Author: Anton Petnitsky
+// GitHub: https://github.com/Mukller/chess
+// Last modified: 2026-05-16 21:57:06 +0300

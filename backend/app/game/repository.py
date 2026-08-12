@@ -45,3 +45,7 @@ class GameRepository:
     async def list_for_user(self, user_id: int, limit: int = 20) -> List[str]:
         redis = get_redis()
         return await redis.zrevrange(_user_index_key(user_id), 0, max(0, limit - 1))
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:49:28 +0300

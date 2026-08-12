@@ -48,3 +48,7 @@ volumes:
 networks:
   chess_net:
     driver: bridge
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 23:42:21 +0300

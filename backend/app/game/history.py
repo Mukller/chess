@@ -126,3 +126,7 @@ class HistoryService:
         except Exception:
             logger.exception("Failed to get history entry %s", game_id)
             return None
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 02:25:24 +0300

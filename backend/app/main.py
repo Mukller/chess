@@ -70,3 +70,7 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 23:41:37 +0300

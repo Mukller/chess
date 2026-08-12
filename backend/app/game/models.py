@@ -86,3 +86,7 @@ class GameState:
             updated_at=int(data.get("updated_at", time.time())),
             last_engine_move=data.get("last_engine_move"),
         )
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 23:16:07 +0300

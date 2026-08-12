@@ -148,3 +148,7 @@ class StatsService:
         fresh = UserStats.new(user_id)
         await self._save(fresh)
         return fresh
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 23:16:07 +0300

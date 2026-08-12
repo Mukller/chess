@@ -1266,3 +1266,7 @@ async def _online_square_handler(callback: CallbackQuery, state: FSMContext) -> 
         await _safe_edit_text(callback, text)
         await callback.message.answer("Главное меню.", reply_markup=_main_keyboard())
     await callback.answer()
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-22 01:10:06 +0300

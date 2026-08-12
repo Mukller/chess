@@ -240,3 +240,7 @@ def state_summary(state: GameState, board: Optional[chess.Board] = None) -> Tupl
         "created_at": state.created_at,
         "updated_at": state.updated_at,
     }
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:49:28 +0300

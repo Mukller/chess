@@ -51,3 +51,7 @@ class MoveResponse(BaseModel):
     state: GameStateResponse
     player_move: str
     engine_move: Optional[EngineMoveSummary] = None
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:49:28 +0300

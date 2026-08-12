@@ -213,3 +213,7 @@ class OnlineService:
             )
         except Exception:
             logger.exception("Failed to publish notification for user %d", user_id)
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-21 23:16:07 +0300

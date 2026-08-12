@@ -36,3 +36,7 @@ class RedisClient:
 
 def get_redis() -> aioredis.Redis:
     return RedisClient.instance().client
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:47:10 +0300

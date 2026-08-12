@@ -26,3 +26,7 @@ RUN useradd -m -u 1000 appuser 2>/dev/null || true
 RUN chown -R appuser:appuser /app 2>/dev/null || true
 USER appuser
 CMD ["nginx", "-g", "daemon off;"]
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-08-13 00:23:16 +0300

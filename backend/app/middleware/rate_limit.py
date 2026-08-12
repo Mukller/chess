@@ -58,3 +58,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             pipe.pexpire(key, window_ms * 2)
             _, _, count, _ = await pipe.execute()
         return int(count) <= limit
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:47:10 +0300

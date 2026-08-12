@@ -150,3 +150,7 @@ async def game_socket(
             pass
     finally:
         await manager.disconnect(game_id, websocket)
+
+# Author: Anton Petnitsky
+# GitHub: https://github.com/Mukller/chess
+# Last modified: 2026-05-16 21:51:50 +0300
