@@ -1,5 +1,19 @@
 # Telegram Chess Bot
 
+<p align="center">
+  <a href="https://github.com/Mukller">
+    <img src="https://img.shields.io/badge/Anton%20Petnitsky-Developer-0d1117?style=for-the-badge&logo=github&logoColor=white&labelColor=0d1117&color=58a6ff" alt="Anton Petnitsky" />
+  </a>
+</p>
+- Issues: [github.com/Mukller/chess/issues](https://github.com/Mukller/chess/issues)
+<div align="center">
+
+[English](README_EN.md) вЂў **Р СѓСЃСЃРєРёР№**
+
+</div>
+
+# Telegram Chess Bot
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
@@ -8,7 +22,6 @@
 
 Полноценный Telegram-бот для игры в шахматы против AI на базе **Stockfish**. Полностью кнопочный интерфейс прямо внутри чата — доска как сетка inline-кнопок, без необходимости запускать WebApp. Также включён React WebApp как опциональный режим.
 
-> 🇬🇧 English version: [README_EN.md](README_EN.md)
 
 <p align="center">
   <img src="assets/screenshot.png" alt="Игровой экран: доска, подсказка, история ходов" width="420" />
